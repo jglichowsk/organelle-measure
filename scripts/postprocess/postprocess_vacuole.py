@@ -1,20 +1,49 @@
 # %%
-import h5py
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import io,util,morphology,measure
 from organelle_measure.tools import skeletonize_zbyz,watershed_zbyz,find_complete_rings,better_vacuole_img,batch_apply
+from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
-def postprocess_vacuole(path_in,path_cell,path_out):
-    with h5py.File(str(path_in),'r') as f_in:
-        img_orga = f_in["exported_data"][:]
-    img_orga = np.argmax(img_orga,axis=0)
-    img_orga = (img_orga>0)
+### Obsolete fnc to read in h5py file type
+# import h5py
+# def postprocess_vacuole(path_in,path_cell,path_out):
+#     with h5py.File(str(path_in),'r') as f_in:
+#         img_orga = f_in["exported_data"][:]
+#     img_orga = np.argmax(img_orga,axis=0)
+#     img_orga = (img_orga>0)
+
+#     img_cell = io.imread(str(path_cell))
+
+#     img_skeleton  = skeletonize_zbyz(img_orga)
+
+#     img_core      = find_complete_rings(img_skeleton)
+    
+#     # img_vacuole   = better_vacuole_img(img_core,img_watershed)
+#     img_vacuole = np.zeros_like(img_core,dtype=int)
+#     for z in range(img_vacuole.shape[0]):
+#         sample = img_core[z]
+#         candidates = np.unique(sample[img_cell>0])
+#         for color in candidates:
+#             if len(np.unique(img_cell[sample==color]))==1:
+#                 img_vacuole[z,sample==color] = color
+
+#     io.imsave(
+#         str(path_out),
+#         util.img_as_uint(img_vacuole) 
+#     )
+#     return None
+
+def postproc_vacuole(path_in,path_cell,path_out):
+    bkgdprob=io.imread(str(path_in))
+    orgprob=1-bkgdprob
+    # img_orga = np.argmax(org_prob,axis=0)
+    # img_maxslice=np.argmax(org_prob,axis=0)
+    img_org = (orgprob>bkgdprob)
 
     img_cell = io.imread(str(path_cell))
-
-    img_skeleton  = skeletonize_zbyz(img_orga)
+    img_skeleton  = skeletonize_zbyz(img_org)
 
     img_core      = find_complete_rings(img_skeleton)
     
@@ -34,66 +63,49 @@ def postprocess_vacuole(path_in,path_cell,path_out):
     return None
 
 # %%
-folders = [
-    "EYrainbow_glucose",
-    "EYrainbow_glucose_largerBF",
-    "EYrainbow_rapamycin_1stTry",
-    "EYrainbow_rapamycin_CheckBistability",
-    "EYrainbow_1nmpp1_1st",
-    "EYrainbowWhi5Up_betaEstrodiol",
-    "EYrainbow_leucine_large", # "leucine-large-blue-gaussian"
-    "EYrainbow_leucine"
-]
-folder_i = "./images/preprocessed/"
-folder_c = "./images/cell/"
-folder_o = "./images/labelled/"
+list_in=[]; list_cell=[]; list_out=[]; #path lists for function batch process
+imgs= master_path #path to experiment images folder
+exp= experiment_path #path to desired experiment and images
+folders= folders_list #list of experiment folders to operate on.
 
-print("Creating folders...")
 for folder in folders:
-    if (newfolder:=Path(folder_o)/folder).exists():
-        print(f"Folder `{newfolder.name}` exists. Skip...")
+    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/postprocess')):
+        print('Creating folder.')
+        os.makedirs(newpath)
     else:
-        newfolder.mkdir()
-        print(f"Folder `{newfolder.name}` created. Next...")
+        print(str(folder+'/postprocess'),'already there.')
 
-list_i = []
-list_c = []
-list_o = []
-for folder in folders:
-    for path_cell in (Path(folder_c)/folder).glob(f"*.tif"):
-        if folder=="EYrainbow_leucine_large":
-            path_binary = (Path(folder_i)/"leucine-large-blue-gaussian")/f"probability_spectral-blue_{path_cell.stem.partition('_')[2]}.h5"
-        else:
-            path_binary = (Path(folder_i)/folder)/f"probability_vacuole_{path_cell.stem.partition('_')[2]}.h5"
-        path_output = (Path(folder_o)/folder)/f"label-vacuole_{path_cell.stem.partition('_')[2]}.tiff"
-        list_i.append(path_binary)
-        list_c.append(path_cell)
-        list_o.append(path_output)
+    for path_cell in (Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))).glob(f"*.tif"):
+        path_binary = (Path(str(imgs+'/'+exp+'/'+folder+'/ilastik prob')))/f"vacuole_{path_cell.stem.partition('-')[2]}_Probabilities.tiff"
+        path_output = (Path(str(newpath)))/f"label-vacuole_{path_cell.stem.partition('-')[2]}.tiff"
+        list_in.append(path_binary)
+        list_cell.append(path_cell)
+        list_out.append(path_output)
 
 args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_cell": list_c,
-    "path_out":  list_o
+    "path_in":   list_in,
+    "path_cell": list_cell,
+    "path_out":  list_out
 })
 # args.to_csv("./vauocle.csv",index=False)
 
-batch_apply(postprocess_vacuole,args)
+batch_apply(postproc_vacuole,args)
 
 # %%
 
-list_i = []
-list_c = []
-list_o = []
-for path_cell in Path("images/cell/paperRebuttal").glob(f"*.tif"):
-    path_binary = Path("images/preprocessed/paperRebuttal")/f"probability_vacuole_{path_cell.stem.partition('_')[2]}.h5"
-    path_output = Path("images/labelled/paperRebuttal")/f"label-vacuole_{path_cell.stem.partition('_')[2]}.tiff"
-    list_i.append(path_binary)
-    list_c.append(path_cell)
-    list_o.append(path_output)
+# list_i = []
+# list_c = []
+# list_o = []
+# for path_cell in Path("images/cell/paperRebuttal").glob(f"*.tif"):
+#     path_binary = Path("images/preprocessed/paperRebuttal")/f"probability_vacuole_{path_cell.stem.partition('_')[2]}.h5"
+#     path_output = Path("images/labelled/paperRebuttal")/f"label-vacuole_{path_cell.stem.partition('_')[2]}.tiff"
+#     list_i.append(path_binary)
+#     list_c.append(path_cell)
+#     list_o.append(path_output)
 
-args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_cell": list_c,
-    "path_out":  list_o
-})
-batch_apply(postprocess_vacuole,args)
+# args = pd.DataFrame({
+#     "path_in":   list_i,
+#     "path_cell": list_c,
+#     "path_out":  list_o
+# })
+# batch_apply(postprocess_vacuole,args)

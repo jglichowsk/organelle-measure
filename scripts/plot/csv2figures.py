@@ -1,3 +1,4 @@
+#%%
 import scipy
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from sklearn import metrics
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from organelle_measure.data import read_results
+from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
 
 # Global Variables
@@ -25,56 +27,45 @@ list_colors = {
     "TOR pathway": [0,4,3,2,1]
 }
 
-px_x,px_y,px_z = 0.41,0.41,0.20
+px_x,px_y,px_z = 0.41,0.41,0.20 #pixel sizes in microns
 
 organelles = [
     "peroxisome",
     "vacuole",
     "ER",
     "golgi",
-    "mitochondria",
+    "mito",
     "LD"
 ]
 
 experiments = {
-    "glucose":     "EYrainbow_glucose_largerBF",
-    "leucine":     "EYrainbow_leucine_large",
-    "cell size":   "EYrainbowWhi5Up_betaEstrodiol",
-    "PKA pathway": "EYrainbow_1nmpp1_1st",
-    "TOR pathway": "EYrainbow_rapamycin_1stTry"
-}
-exp_names = experiments.keys()
-exp_names = list(exp_names)
+    "glucose":     "EYrainbow_glucose",
+    }
+exp_names = list(experiments.keys())
 exp_folder = [experiments[i] for i in exp_names]
 
-subfolders = [
-    "EYrainbow_glucose",
-    "EYrainbow_glucose_largerBF",
-    "EYrainbow_rapamycin_1stTry",
-    "EYrainbow_rapamycin_CheckBistability",
-    "EYrainbow_1nmpp1_1st",
-    "EYrainbow_leucine_large",
-    "EYrainbow_leucine",
-    "EYrainbowWhi5Up_betaEstrodiol"
-]
 
-# direction in which the growth rate grows.
-extremes = {
-    "EYrainbow_glucose":                    [0.,    100.],
-    "EYrainbow_glucose_largerBF":           [0.,    100.],
-    "EYrainbow_leucine_large":              [0.,    100.],
-    "EYrainbowWhi5Up_betaEstrodiol":        [0.,    10.],
-    "EYrainbow_rapamycin_1stTry":           [1000., 0.],
-    "EYrainbow_rapamycin_CheckBistability": [300.,  0.],
-    "EYrainbow_1nmpp1_1st":                 [3000., 0.]
-}
+# # direction in which the growth rate grows.
+# extremes = {
+#     "EYrainbow_glucose":                    [0.,    100.],
+#     "EYrainbow_glucose_largerBF":           [0.,    100.],
+#     "EYrainbow_leucine_large":              [0.,    100.],
+#     "EYrainbowWhi5Up_betaEstrodiol":        [0.,    10.],
+#     "EYrainbow_rapamycin_1stTry":           [1000., 0.],
+#     "EYrainbow_rapamycin_CheckBistability": [300.,  0.],
+#     "EYrainbow_1nmpp1_1st":                 [3000., 0.]
+# }
 
-
+#%%
 # READ FILES
-df_bycell = read_results(Path("./data"),subfolders,(px_x,px_y,px_z))
+imgs= master_path #path to experiment images folder
+exp= experiment_path #path to desired experiment and images
+# folders= folders_list #list of experiment folders to operate on. 
+folders=['6-26_ARF1']
 
+df_bycell = read_results(imgs+'/'+exp,folders,(px_x,px_y,px_z))
 
-# DATAFRAME FOR CORRELATION COEFFICIENT
+#%%  # DATAFRAME FOR CORRELATION COEFFICIENT
 
 pv_bycell = df_bycell.set_index(['folder','condition','field','idx-cell'])
 df_corrcoef = pd.DataFrame(index=pv_bycell.loc[pv_bycell["organelle"].eq("ER")].index)
@@ -97,12 +88,13 @@ for orga in [*organelles,"non-organelle"]:
         df_corrcoef.loc[:,prop_new] = pv_bycell.loc[pv_bycell["organelle"].eq(orga),prop]
 df_corrcoef.reset_index(inplace=True)
 
-# Kullback–Leibler_divergence of different conditions
+#%%  # Kullback–Leibler_divergence of different conditions
 df_entropies = []
 for exp in exp_names:
     folder = experiments[exp]
     num_bin = 4
     organelles_kl = [f"total-fraction-{orga}" for orga in organelles]
+    # organelles_kl = [f"{orga}-volume-fraction" for orga in organelles]
     df_kldiverge = df_corrcoef.loc[df_corrcoef["folder"].eq(folder),["condition",*organelles_kl]]
     # get grids in 6 dimensional space
     grids = np.array(list(map(
@@ -197,8 +189,7 @@ for exp in exp_names:
 df_entropies = pd.concat(df_entropies,ignore_index=True)
 # need to incorporate df_rate
 
-
-# KL divergence and info entropy
+#%%  # KL divergence and info entropy
 
 for folder in df_entropies["folder"].unique():
     plt.figure(figsize=(20,12))
@@ -292,7 +283,7 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
 plt.savefig(f'data/mutual_information/klDivergence_entropy.png')
 plt.close()
 
-# glucose large experiment only:
+#%%  # glucose large experiment only:
 plt.rcParams['font.size'] = '26'
 plt.figure(figsize=(15,10))
 g = sns.scatterplot(
@@ -345,8 +336,7 @@ for folder in subfolders:
         )
         fig.write_html(f'{Path("./data/mutual_information")}/{mx_name}_{folder}.html')
 
-
-# Correlation coefficient
+#%%  # Correlation coefficient
 for folder in subfolders:
     np_corrcoef = df_corrcoef.loc[df_corrcoef["folder"].eq(folder),columns].to_numpy()
     corrcoef = np.corrcoef(np_corrcoef,rowvar=False)
@@ -427,8 +417,7 @@ for folder in subfolders:
     # # g.plot_joint(sns.kdeplot, zorder=0, levels=6)
     # g.plot_marginals(sns.rugplot, height=-.15, clip_on=False)
 
-
-# EXPERIMENT CONDITION LEVEL
+#%%  # EXPERIMENT CONDITION LEVEL
 
 pivot_bycondition = df_bycell.groupby(['folder','organelle','condition']).mean()[['mean','count','total','cell-area','cell-volume','total-fraction']]
 pivot_bycondition["cell_count"] = df_bycell[['folder','organelle','condition','mean']].groupby(['folder','organelle','condition']).count()
@@ -472,8 +461,7 @@ df_fraction_bycell.reset_index(inplace=True)
 df_bycell.reset_index(inplace=True)
 # df_fraction_bycell.to_csv(str(Path("./data/fraction_rate")/"fraction-by-cells.csv"),index=False)
 
-
-# plot volume fraction vs. growth rate
+#%%  # plot volume fraction vs. growth rate
 fig = px.line(
     df_bycondition.loc[df_bycondition['organelle'].eq("non-organelle")],
     x='growth_rate',y='total',
@@ -510,8 +498,7 @@ for orga in [*organelles,"non-organelle"]:
     plt.close()
     
 
-
-# PLOTS
+#%%  # PLOTS
 
 def plot_histo_violin(df,prop_y,prop_x="cell_area",savepath="histo-violin.html"):
     df["plotly"] = df[prop_y].rank(pct=True) # `pct` works but fuck why
@@ -605,7 +592,7 @@ for folder in subfolders:
             f'{Path("./data/figures")}/organelle_mean_vs_condition_{folder}_{orga}.html'
         )
 
-# PCA 
+#%%  # PCA 
 def make_pca_plots(experiment,property,groups=None,has_volume=False,is_normalized=False,non_organelle=False,saveto="./plots/"):
     for pca_subfolder in [ "pca_data/",
                            "pca_compare/",
@@ -924,8 +911,7 @@ fig_summary = px.imshow(
 )
 fig_summary.write_html(f'{saveto}/pca_compare/summary_cosine.html')
 
-
-# power law
+#%%  # power law
 import numpy as np
 import pandas as pd
 from pathlib import Path

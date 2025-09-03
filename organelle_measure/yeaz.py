@@ -26,7 +26,7 @@ def yeaz_label(img_i,min_dist,**kwargs):
     OUTPUT: img_o, a 2-D uint label image, same shape as img_i.
     """
     img_exposure  = exposure.equalize_adapthist(img_i)
-    img_predict   = neural_network.prediction(img_exposure,mic_type="bf",device=torch.device("cuda"),**kwargs)
+    img_predict   = neural_network.prediction(img_exposure,mic_type="bf",device=torch.device("cpu"),**kwargs)
     img_threshold = neural_network.threshold(img_predict)
     img_segment   = segment.segment(
                                     img_threshold,img_predict,

@@ -1,19 +1,18 @@
 # %%
 import pandas as pd
+import os
 from pathlib import Path
 from skimage import io,measure
 from organelle_measure.tools import batch_apply
+from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
 def parse_meta_cell(name):
     """name is the stem of the ORGANELLE label image file."""
-    if "1nmpp1" in name:
-        experiment = "1nmpp1"
-    elif "betaEstrodiol" in name:
-        experiment = "betaEstrodiol"
-    else:
-        experiment = name.partition("EYrainbow_")[2].partition("-")[0]
-    condition = name.partition(f"{experiment}-")[2].partition("_")[0]
-    field = name.partition("field-")[2]    
+    #assign various labels according to file naming convention.
+    labels=name.split('_')
+    experiment=labels[1]
+    condition=labels[2]
+    field=labels[3]  
     return {
         "experiment": experiment,
         "condition":  condition,
@@ -27,8 +26,8 @@ def measure1cell(path_in,path_out):
     meta = parse_meta_cell(name)
     measured = measure.regionprops_table(
                     img_cell,
-                    properties=('label','area','centroid','bbox','eccentricity')
-               )
+                    properties=('label','area','centroid','bbox','eccentricity') ### image_intensity returns ndarray of pixels inside bounding box
+               )                                                                 ### similarly intensity_mean and intensity_std except those return floats.
     result = meta | measured
     df = pd.DataFrame(result)
     df.rename(columns={'label':'idx-cell'},inplace=True)
@@ -36,74 +35,70 @@ def measure1cell(path_in,path_out):
     return None
 
 # %%
-subfolders = [
-    "EYrainbow_glucose",
-    "EYrainbow_glucose_largerBF",
-    "EYrainbow_rapamycin_1stTry",
-    "EYrainbow_rapamycin_CheckBistability",
-    "EYrainbow_1nmpp1_1st",
-    "EYrainbow_leucine_large",
-    "EYrainbow_leucine",
-    "EYrainbowWhi5Up_betaEstrodiol"
-]
+imgs= master_path #path to experiment images folder
+exp= experiment_path #path to desired experiment and images
+folders= folders_list #list of experiment folders to operate on. 
 
-folder_i = "./images/cell"
-folder_o = "./data/results/"
+list_in = []
+list_out = []
 
-print("Creating folders...")
-for folder in subfolders:
-    if (newfolder:=Path(folder_o)/folder).exists():
-        print(f"Folder `{newfolder.name}` exists. Skip...")
+for folder in folders:
+    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/cell_measure')):
+        print('Creating folder.')
+        os.makedirs(newpath)
     else:
-        newfolder.mkdir()
+        print(str(folder+'/cell_measure'),'already there.')
 
-list_i = []
-list_o = []
-for subfolder in subfolders:
-    for path_i in (Path(folder_i)/subfolder).glob("*.tif"):
-        path_o = (Path(folder_o)/subfolder)/f"cell_{path_i.stem.partition('_')[2]}.csv"
-        list_i.append(path_i)
-        list_o.append(path_o)
+    for path_in in (Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))).glob("binCell*.tif"):
+        path_out = Path(str(imgs+'/'+exp+'/'+folder+'/cell_measure'))/f"{path_in.stem.partition('-')[2]}.csv"
+        list_in.append(path_in)
+        list_out.append(path_out)
+
 
 args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_out":  list_o
+    "path_in":   list_in,
+    "path_out":  list_out
 })
 
 batch_apply(measure1cell,args)
 
 # %%
-list_i = []
-list_o = []
+# #pathing
+# imgs_path=f"C:/Users/jglic/OneDrive - Washington University in St. Louis/Documents/School/WashU/Mukherji Lab/Experiment Images"
+# exp_path=f"rbow knockouts/BF_only" #path to desired experiment and images
+# folder = f"7-23-24"
+# list_in = []
+# list_out = []
+# if not os.path.exists(newpath:=Path(imgs_path+'/'+exp_path+'/'+folder+'/cell_measure')):
+#     print('Creating folder.')
+#     os.makedirs(newpath)
+# else:
+#     print(str(folder+'/cell_measure'),'already there.')
 
-for path_i in Path("images/cell/paperRebuttal").glob("*.tif"):
-    path_o = Path("data/results/paperRebuttal")/f"cell_{path_i.stem.partition('_')[2]}.csv"
-    list_i.append(path_i)
-    list_o.append(path_o)
+# for path_in in (Path(str(imgs_path+'/'+exp_path+'/'+folder+'/cell_segment'))).glob("binCell*_1.tif"):
+#     path_out = Path(newpath)/f"{path_in.stem.partition('-')[2]}.csv"
+#     list_in.append(path_in)
+#     list_out.append(path_out)
 
-args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_out":  list_o
-})
-batch_apply(measure1cell,args)
-
-# %%
-csv = pd.read_csv("./binCell-after_EYrainbow_glu-0-5_field-0.csv")
-# %%
-import numpy as np
-import matplotlib.pyplot as plt
-
-px_x,px_y,px_z = 0.41,0.41,0.20
-csv["effective-volume"] = (px_x*px_y)*np.sqrt(px_x*px_y)*(2.)*csv.loc[:,"area"]*np.sqrt(csv.loc[:,"area"])/np.sqrt(np.pi)
-
-plt.figure()
-plt.hist(csv["area"],bins=20)
-plt.xlabel("size/pixels")
-plt.savefig("binCell-after_EYrainbow_glu-0-5_field-0_histogram-pixel.png")
-
-plt.figure()
-plt.hist(csv["effective-volume"],bins=20)
-plt.xlabel("size/microns")
-plt.savefig("binCell-after_EYrainbow_glu-0-5_field-0_histogram-microns.png")
+# args = pd.DataFrame({
+#     "path_in":   list_in,
+#     "path_out":  list_out
+# })
+# batch_apply(measure1cell,args)
 
 # %%
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# px_x,px_y,px_z = 0.41,0.41,0.20
+# csv["effective-volume"] = (px_x*px_y)*np.sqrt(px_x*px_y)*(2.)*csv.loc[:,"area"]*np.sqrt(csv.loc[:,"area"])/np.sqrt(np.pi)
+
+# plt.figure()
+# plt.hist(csv["area"],bins=20)
+# plt.xlabel("size/pixels")
+# plt.savefig("binCell-after_EYrainbow_glu-0-5_field-0_histogram-pixel.png")
+
+# plt.figure()
+# plt.hist(csv["effective-volume"],bins=20)
+# plt.xlabel("size/microns")
+# plt.savefig("binCell-after_EYrainbow_glu-0-5_field-0_histogram-microns.png")

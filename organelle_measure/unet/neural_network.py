@@ -61,12 +61,15 @@ def prediction(im, mic_type, pretrained_weights=None, model_type='pytorch', devi
     row_add = 16-nrow%16
     col_add = 16-ncol%16
     padded = np.pad(im, ((0, row_add), (0, col_add)))
+
+    mypath=f"C:/Users/jglic/WashU/organelle-measure/organelle_measure/unet/path_weights"
     
     if pretrained_weights is None:
         if mic_type == 'pc':
             pretrained_weights = str(path_weights) + '/' + 'weights_budding_PhC_multilab_0_1'
         elif mic_type == 'bf':
-            pretrained_weights = str(path_weights) + '/' + 'weights_budding_BF_multilab_0_1'
+            # pretrained_weights = str(path_weights) + '/' + 'weights_budding_BF_multilab_0_1'
+            pretrained_weights = mypath + "/" + "weights_budding_BF_multilab_0_1"
         elif mic_type == 'fission':
             pretrained_weights = str(path_weights) + '/' + 'weights_fission_multilab_0_2'
         if model_type == 'tensorflow':

@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -13,24 +14,43 @@ def get_nd2_size(path:str):
         size = images.sizes
     return size
 
+# def load_nd2_plane(path:str,frame:str='cyx',axes:str='tz',idx:int=0,channelsum=False):
+#     """read an image flexibly with ND2Reader."""
+#     with ND2Reader(str(path)) as images:
+#         images.bundle_axes = frame
+#         images.iter_axes = axes
+#         if channelsum==True:
+#             img=images.get_frame(idx)
+#             img_summed=img.sum(axis=0)
+#         else:
+#             img_summed=images[idx]
+#     return img_summed.squeeze()
+
+#Rewritten to exclude boolean channelsum argument; instead do summation in organelle fncs
 def load_nd2_plane(path:str,frame:str='cyx',axes:str='tz',idx:int=0):
     """read an image flexibly with ND2Reader."""
-    with ND2Reader(path) as images:
+    with ND2Reader(str(path)) as images:
         images.bundle_axes = frame
         images.iter_axes = axes
-        img = images[idx]
-    return img.squeeze()
+        img=images[idx]
+    return img
 # END of ND2reader wrapper.
 
+#%%%
 # START of organelle nd2 file opener
 def open_golgi(path):
     if 'c' in get_nd2_size(path):
-        return np.mean(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
+        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
+    else:
+        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
+def open_ER(path):
+    if 'c' in get_nd2_size(path):
+        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
     else:
         return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
 def open_mito(path):
     if Path(path).suffix == ".nd2":
-        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=0).astype(int)
+        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=1).astype(int)
     else:
         img = io.imread(str(path))
         img_raw = np.zeros([int(img.shape[0]/2),*img.shape[1:]],dtype=int)
@@ -39,7 +59,7 @@ def open_mito(path):
         return img_raw
 def open_LD(path):
     if Path(path).suffix == ".nd2":
-        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=1).astype(int)
+        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=0).astype(int)
     else:
         img = io.imread(str(path))
         img_raw = np.zeros([int(img.shape[0]/2),*img.shape[1:]],dtype=int)
@@ -49,7 +69,7 @@ def open_LD(path):
 open_organelles = {
     "peroxisome":   lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=0).astype(int),
     "vacuole":      lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=1).astype(int),
-    "ER":           lambda x: load_nd2_plane(str(x),frame="zyx",axes='t', idx=0).astype(int),
+    "ER":           open_ER,
     "golgi":        open_golgi,
     "mitochondria": open_mito,
     "LD":           open_LD
@@ -193,3 +213,5 @@ def batch_apply(func,args:pd.DataFrame):
     args["ERR_MESSAGES"] = pd.Series(errmsgs)
     return None
 
+
+# %%

@@ -127,9 +127,6 @@ It should be a `pandas.DataFrame`, whose columns are the keyword arguments to th
         - Outputs: label image of different cells, registered to the FOV of the confocal detector 
             - `uint16(Y,X)`
             - `images/cell/{Experiment}/binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-    2. "EYrainbow_leucine_large":
-        - Sum across different z slices of `spectral-green_*.nd2`.
-        - Feed into ilastik.
 2. Preprocess organelle images:
     1. peroxisome and vacuole:
         1. If not "EYrainbow_leucine_large"
@@ -139,14 +136,6 @@ It should be a `pandas.DataFrame`, whose columns are the keyword arguments to th
                 - `images/raw/{Experiment}/unmixed-blue_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
             - Outputs: TIF labelled images of organelles, each organelle are saves in a separated image.
                 - `uint16(Z,Y,X)`
-                - `images/preprocessed/{Experiment}/{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-        2. If "EYrainbow_leucine_large":
-            - Script: `preprocess_blue_leucineLarge.py`
-            - Inputs: Unmixed ND2 image of peroxisomes and vacuoles, having 2 channels in the same image
-                - `int12(2,Z,Y,X)`, 
-                - `images/raw/{Experiment}/unmixed-blue_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-            - Outputs: TIF labelled images of organelles, each organelle are saves in a separated image.
-                - `uint16(Z,Y,X)` 
                 - `images/preprocessed/{Experiment}/{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
     2. ER
         - Script: `preprocess_green.py`
@@ -167,20 +156,15 @@ It should be a `pandas.DataFrame`, whose columns are the keyword arguments to th
 3. Segment organelle images with `ilastik`, then export to simple segmentation and probability.
     - ilastik project files can be found at `data/ilastik`
     - Outputs:
-        - Simple Segmentation: `uint8(Z,Y,X)`
         - Probability:         `float(2,Z,Y,X)`
 4. Postprocess organelle images
     1. peroxisome, Golgi, lipid droplet:
         - Script: `postprocess_globular.py`
         - Inputs:
-            - organelle binary image:
-                - ilastik simple segmentation image
-                - `float(2,Z,Y,X)`
-                - `probability_{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.h5`
             - organelle reference image:
                 - ilastik probability image
                 - `float(Z,Y,X)`
-                - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.h5`
+                - TIFF file type
             - cell image
                 - TIFF label image
                 - `uint16(Y,X)`
@@ -229,7 +213,7 @@ It should be a `pandas.DataFrame`, whose columns are the keyword arguments to th
     - Inputs: 
         - TIFF label image
         - `uint16(Y,X)`
-        - `binCell_EYrainbow_{experiment}-{condition}_field-{f}.tiff`                    
+        - Segmented Cell Image from segment_cell.py (Step 1)                   
     - Outputs: 
         - `data/results/cell_EYrainbow_{experiment}-{condition}_field-{f}.csv`
 6. Measure organelle properties

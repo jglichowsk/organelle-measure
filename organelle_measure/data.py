@@ -10,7 +10,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
         "vacuole",
         "ER",
         "golgi",
-        "mitochondria",
+        "mito",
         "LD"
     ]
 
@@ -18,9 +18,10 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
     dfs_cell = []
     dfs_orga = []
     for folder in subfolders:
-        df_folder_cell = pd.concat((pd.read_csv(fcell) for fcell in (Path(folder_i)/folder).glob("cell*.csv")))
-        df_folder_orga = pd.concat((pd.read_csv(fcell) for fcell in (Path(folder_i)/folder).glob("[!c]*.csv")))
-
+        df_folder_cell = pd.concat((pd.read_csv(fcell) for fcell in (Path(str(folder_i+'/'+folder+'/cell_measure'))).glob("*.csv")))
+        df_folder_orga = pd.concat((pd.read_csv(fcell) for fcell in (Path(str(folder_i+'/'+folder+'/org_measure'))).glob("*.csv")))
+        # where folder_i is imgs_path and folder is experiment path
+        
         df_folder_cell["folder"] = folder
         df_folder_orga["folder"] = folder
         
@@ -37,7 +38,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
         "experiment": "string",
         "condition":  "float",
         "hour":       "int8",
-        "field":      "int8",
+        "field":      "string",
         "idx-cell":   "int16",
         "area":       "int16",
         "bbox-0":     "int16",
@@ -50,7 +51,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
         "experiment":   "string",
         "condition":    "float",
         "hour":         "int8",
-        "field":        "int8",
+        "field":        "string",
         "organelle":    "string",
         "idx-cell":     "int16",
         "idx-orga":     "int16",
@@ -74,6 +75,8 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
 
     # data (in unit of microns)
     df_orga_all["volume-micron"] = np.empty_like(df_orga_all.index)
+
+    df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-micron"] = None #handles warning brought about by following line and filling an empty column/row in pandas (I believe).
     df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-micron"] = (px_x*px_y)*np.sqrt(px_x*px_y)*(2.)*df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-pixel"]*np.sqrt(df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-pixel"])/np.sqrt(np.pi) 
     df_orga_all.loc[df_orga_all["organelle"].ne("vacuole"),"volume-micron"] = px_x*px_y*px_z*df_orga_all.loc[df_orga_all["organelle"].ne("vacuole"),"volume-pixel"]
 

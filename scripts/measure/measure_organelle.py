@@ -3,19 +3,17 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import io,measure
-from batch_apply import batch_apply
+from organelle_measure.tools import batch_apply
+from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
 def parse_meta_organelle(name):
     """name is the stem of the ORGANELLE label image file."""
+    #assign various labels according to file naming convention.
     organelle = name.partition("-")[2].partition("_")[0]
-    if "1nmpp1" in name:
-        experiment = "1nmpp1"
-    elif "betaEstrodiol" in name:
-        experiment = "betaEstrodiol"
-    else:
-        experiment = name.partition("EYrainbow_")[2].partition("-")[0]
-    condition = name.partition(f"{experiment}-")[2].partition("_")[0]
-    field = name.partition("field-")[2]    
+    labels=name.split('_')
+    experiment=labels[2]
+    condition=labels[3]
+    field=labels[4]     
     return {
         "experiment": experiment,
         "condition":  condition,
@@ -93,71 +91,57 @@ organelles = [
     "peroxisome",
     "ER",
     "golgi",
-    "mitochondria",
+    "mito",
     "LD",
     "vacuole"
 ]
 
 # %%
-subfolders = [
-    "EYrainbow_glucose",
-    "EYrainbow_glucose_largerBF",
-    "EYrainbow_rapamycin_1stTry",
-    "EYrainbow_rapamycin_CheckBistability",
-    "EYrainbow_1nmpp1_1st",
-    "EYrainbow_leucine_large",
-    "EYrainbow_leucine",
-    "EYrainbowWhi5Up_betaEstrodiol"
-]
+list_in=[]; list_cell=[]; list_out=[]; #path lists for function batch process. In=organelle, cell=BF segmented tif, out=export path.
 
-folder_i = "./images/labelled"
-folder_c = "./images/cell"
-folder_o = "./data/results/"
+imgs= master_path #path to experiment images folder
+exp= experiment_path #path to desired experiment and images
+folders= folders_list #list of experiment folders to operate on. 
 
-print("Creating folders...")
-for folder in subfolders:
-    if (newfolder:=Path(folder_o)/folder).exists():
-        print(f"Folder `{newfolder.name}` exists. Skip...")
+for folder in folders:
+    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/org_measure')):
+        print('Creating folder.')
+        os.makedirs(newpath)
     else:
-        newfolder.mkdir()
+        print(str(folder+'/org_measure'),'already there.')
+    for path_cell in Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment')).glob("*.tif"):
+            for organelle in organelles:
+                path_in = Path(imgs+'/'+exp+'/'+folder+'/postprocess')/f"label-{organelle}_{path_cell.stem.partition('-')[2]}.tiff"
+                path_out = Path(str(newpath))/f"{organelle}_{path_cell.stem.partition('-')[2]}.csv"
 
-list_i = []
-list_c = []
-list_o = []
-for subfolder in subfolders:
-    for path_c in (Path(folder_c)/subfolder).glob("*.tif"):
-        for organelle in organelles:
-            path_i = Path(folder_i)/subfolder/f"label-{organelle}_{path_c.stem.partition('_')[2]}.tiff"
-            path_o = Path(folder_o)/subfolder/f"{organelle}_{path_c.stem.partition('_')[2]}.csv"
-
-            list_i.append(path_i)
-            list_c.append(path_c)
-            list_o.append(path_o)
+                list_in.append(path_in)
+                list_cell.append(path_cell)
+                list_out.append(path_out)
         
 args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_cell": list_c,
-    "path_out":  list_o
+    "path_in":   list_in,
+    "path_cell": list_cell,
+    "path_out":  list_out
 })
 
 batch_apply(measure1organelle,args)
 
 # %%
-list_i = []
-list_c = []
-list_o = []
+# list_i = []
+# list_c = []
+# list_o = []
 
-for path_c in Path("images/cell/paperRebuttal").glob("*.tif"):
-    for organelle in organelles:
-        path_i = Path("images/labelled/paperRebuttal")/f"label-{organelle}_{path_c.stem.partition('_')[2]}.tiff"
-        path_o = Path("data/results/paperRebuttal")/f"{organelle}_{path_c.stem.partition('_')[2]}.csv"
-        list_i.append(path_i)
-        list_c.append(path_c)
-        list_o.append(path_o)
+# for path_c in Path("images/cell/paperRebuttal").glob("*.tif"):
+#     for organelle in organelles:
+#         path_i = Path("images/labelled/paperRebuttal")/f"label-{organelle}_{path_c.stem.partition('_')[2]}.tiff"
+#         path_o = Path("data/results/paperRebuttal")/f"{organelle}_{path_c.stem.partition('_')[2]}.csv"
+#         list_i.append(path_i)
+#         list_c.append(path_c)
+#         list_o.append(path_o)
         
-args = pd.DataFrame({
-    "path_in":   list_i,
-    "path_cell": list_c,
-    "path_out":  list_o
-})
-batch_apply(measure1organelle,args)
+# args = pd.DataFrame({
+#     "path_in":   list_i,
+#     "path_cell": list_c,
+#     "path_out":  list_o
+# })
+# batch_apply(measure1organelle,args)

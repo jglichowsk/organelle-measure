@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 from skimage import util,io,filters
 from organelle_measure.tools import open_organelles,neighbor_mean,batch_apply
-from organelle_measure.vars_allround1data import list_folders
+from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
 def preprocess_blue(path_in,path_out,organelle):
     img_raw   = open_organelles[organelle](str(path_in))
@@ -13,17 +13,28 @@ def preprocess_blue(path_in,path_out,organelle):
     return None
 
 # %%
-list_in   = []
-list_out  = []
-list_orga = []
-for folder in list_folders:
-    for path_in in (Path("images/raw")/folder).glob("unmixed-blue*.nd2"):
-        path_peroxisome = Path("images/preprocessed")/folder/f'peroxisome_{path_in.stem.partition("_")[2]}.tif'
+list_in   = [] #spectral/confocal images
+list_out  = [] #output destination
+list_orga = [] #organelle label to diff. between the three (Golgi, LD, mito)
+
+imgs= master_path #path to experiment images folder
+exp= experiment_path #path to desired experiment and images
+folders= folders_list #list of experiment folders to operate on. 
+
+print("Creating folder as needed.")
+for folder in folders:
+    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/preprocess')):
+        print('Creating',str(folder+'/preprocess'))
+        os.makedirs(newpath)
+    else:
+        print(str(folder+'/preprocess'),'already there.')
+    for path_in in (Path(str(imgs+'/'+exp+'/'+folder+'/raw'))).glob("CFP*unmixed.nd2"):
+        path_peroxisome = Path(str(imgs+'/'+exp+'/'+folder+'/preprocess'))/f'peroxisome_{path_in.stem.partition("_")[2][:-8]}.tif'
         list_in.append(path_in)
         list_out.append(path_peroxisome)
         list_orga.append("peroxisome")
 
-        path_vacuole = Path("./data/preprocessed")/folder/f'vacuole_{path_in.stem.partition("_")[2]}.tif'
+        path_vacuole = Path(str(imgs+'/'+exp+'/'+folder+'/preprocess'))/f'vacuole_{path_in.stem.partition("_")[2][:-8]}.tif'
         list_in.append(path_in)
         list_out.append(path_vacuole)
         list_orga.append("vacuole")
@@ -36,25 +47,25 @@ args = pd.DataFrame({
 batch_apply(preprocess_blue,args)
 
 # %%
-# Rebuttal Experiment: Glucose Perturbation for 8 Hours
-list_in   = []
-list_out  = []
-list_orga = []
+### Rebuttal Experiment: Glucose Perturbation for 8 Hours
+# list_in   = []
+# list_out  = []
+# list_orga = []
 
-for path_in in (Path("images/raw/paperRebuttal")).glob("unmixed-blue*.nd2"):
-    path_peroxisome = Path("images/preprocessed/paperRebuttal")/f'peroxisome_{path_in.stem.partition("_")[2]}.tif'
-    list_in.append(path_in)
-    list_out.append(path_peroxisome)
-    list_orga.append("peroxisome")
+# for path_in in (Path("images/raw/paperRebuttal")).glob("unmixed-blue*.nd2"):
+#     path_peroxisome = Path("images/preprocessed/paperRebuttal")/f'peroxisome_{path_in.stem.partition("_")[2]}.tif'
+#     list_in.append(path_in)
+#     list_out.append(path_peroxisome)
+#     list_orga.append("peroxisome")
 
-    path_vacuole = Path("images/preprocessed/paperRebuttal")/f'vacuole_{path_in.stem.partition("_")[2]}.tif'
-    list_in.append(path_in)
-    list_out.append(path_vacuole)
-    list_orga.append("vacuole")
+#     path_vacuole = Path("images/preprocessed/paperRebuttal")/f'vacuole_{path_in.stem.partition("_")[2]}.tif'
+#     list_in.append(path_in)
+#     list_out.append(path_vacuole)
+#     list_orga.append("vacuole")
 
-args = pd.DataFrame({
-    "path_in": list_in,
-    "path_out": list_out,
-    "organelle": list_orga
-})
-batch_apply(preprocess_blue,args)
+# args = pd.DataFrame({
+#     "path_in": list_in,
+#     "path_out": list_out,
+#     "organelle": list_orga
+# })
+# batch_apply(preprocess_blue,args)
