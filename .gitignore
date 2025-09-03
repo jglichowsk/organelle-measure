@@ -18,3 +18,4 @@ __pycache__/
 
 # unet weight file
 organelle_measure/unet/weights*
+organelle_measure/unet/path_weights/*
