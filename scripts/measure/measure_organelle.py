@@ -127,21 +127,3 @@ args = pd.DataFrame({
 batch_apply(measure1organelle,args)
 
 # %%
-# list_i = []
-# list_c = []
-# list_o = []
-
-# for path_c in Path("images/cell/paperRebuttal").glob("*.tif"):
-#     for organelle in organelles:
-#         path_i = Path("images/labelled/paperRebuttal")/f"label-{organelle}_{path_c.stem.partition('_')[2]}.tiff"
-#         path_o = Path("data/results/paperRebuttal")/f"{organelle}_{path_c.stem.partition('_')[2]}.csv"
-#         list_i.append(path_i)
-#         list_c.append(path_c)
-#         list_o.append(path_o)
-        
-# args = pd.DataFrame({
-#     "path_in":   list_i,
-#     "path_cell": list_c,
-#     "path_out":  list_o
-# })
-# batch_apply(measure1organelle,args)

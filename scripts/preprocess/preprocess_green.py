@@ -21,7 +21,7 @@ imgs= master_path #path to experiment images folder
 exp= experiment_path #path to desired experiment and images
 folders= folders_list #list of experiment folders to operate on. 
 
-print("Creating folder as needed.")
+print("Creating folders as needed.")
 for folder in folders:
     if not os.path.exists(newpath:=Path(str(imgs+'/'+exp+'/'+folder+'/preprocess'))):
         print('Creating',str(folder+'/preprocess'))

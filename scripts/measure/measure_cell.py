@@ -63,28 +63,6 @@ args = pd.DataFrame({
 batch_apply(measure1cell,args)
 
 # %%
-# #pathing
-# imgs_path=f"C:/Users/jglic/OneDrive - Washington University in St. Louis/Documents/School/WashU/Mukherji Lab/Experiment Images"
-# exp_path=f"rbow knockouts/BF_only" #path to desired experiment and images
-# folder = f"7-23-24"
-# list_in = []
-# list_out = []
-# if not os.path.exists(newpath:=Path(imgs_path+'/'+exp_path+'/'+folder+'/cell_measure')):
-#     print('Creating folder.')
-#     os.makedirs(newpath)
-# else:
-#     print(str(folder+'/cell_measure'),'already there.')
-
-# for path_in in (Path(str(imgs_path+'/'+exp_path+'/'+folder+'/cell_segment'))).glob("binCell*_1.tif"):
-#     path_out = Path(newpath)/f"{path_in.stem.partition('-')[2]}.csv"
-#     list_in.append(path_in)
-#     list_out.append(path_out)
-
-# args = pd.DataFrame({
-#     "path_in":   list_in,
-#     "path_out":  list_out
-# })
-# batch_apply(measure1cell,args)
 
 # %%
 # import numpy as np

@@ -9,12 +9,12 @@ from organelle_measure.pathing_vars import master_path, experiment_path, folders
 
 def segment_cells(path_in,path_out):
     img_i = load_nd2_plane(str(path_in),frame='yx',axes='t',idx=0)
-    for prep in yeaz_preprocesses:
+    for prep in yeaz_preprocesses: #applies the affine transform and pixel scaling to align wide-field and confocal images. 
         img_i = prep(img_i)
-    img_b = yeaz_label(img_i,min_dist=5)
-    img_b = segmentation.clear_border(img_b)
-    properties = measure.regionprops(img_b)
-    for prop in properties:
+    img_b = yeaz_label(img_i,min_dist=5) #applies YeaZ without GUI, using min pixel distance of 5 px. 
+    img_b = segmentation.clear_border(img_b) #clear objects touching the image border. 
+    properties = measure.regionprops(img_b) #measures properties of each labelled region (here, cells) such as area, centroid, etc. 
+    for prop in properties: #Omit those cells below a certain area threshold by setting them to be background.
         if prop.area < 50: # hard coded threshold, bad
             img_b[img_b==prop.label] = 0
     img_b = measure.label(img_b)
@@ -51,29 +51,5 @@ args = pd.DataFrame({
 })
 
 batch_apply(segment_cells,args)
-
-# %%
-
-# list_in = []
-# list_out = []
-
-# #path to experiment images folder
-# imgs_path=f"C:/Users/jglic/OneDrive - Washington University in St. Louis/Documents/School/WashU/Mukherji Lab/Experiment Images"
-# exp_path=f"rbow knockouts/BF_only" #path to desired experiment and images
-# folder = f"7-23-24"
-# if not os.path.exists(newpath:=Path(str(imgs_path+'/'+exp_path+'/'+folder+'/cell_segment'))):
-#     print('Creating',str(folder,'/cell_segment'))
-#     os.makedirs(newpath)
-# else:
-#     print(str(folder+'/cell_segment'),'already there.')
-# for file_cell in Path(str(imgs_path+'/'+exp_path+'/'+folder+'/raw')).glob("BF*.nd2"):
-#     list_in.append(file_cell)
-#     file_segm = Path(newpath)/f"binCell-{file_cell.stem[3:]}.tif"
-#     list_out.append(file_segm)
-# args = pd.DataFrame({
-#     "path_in":  list_in,
-#     "path_out": list_out
-# })
-# batch_apply(segment_cells,args)
 
 # %%

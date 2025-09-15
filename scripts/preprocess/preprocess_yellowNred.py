@@ -66,34 +66,3 @@ args = pd.DataFrame({
 batch_apply(preprocess_yellowNred,args)
 
 # %%
-# list_in   = []
-# list_cell = []
-# list_out  = []
-# list_orga = []
-
-# for path_cell in (Path("images/cell/paperRebuttal")).glob("*.tif"):
-#     path_yellow = Path("images/raw/paperRebuttal")/f"spectral-yellow_{path_cell.stem.partition('_')[2]}.nd2"
-#     path_golgi = Path("images/preprocessed/paperRebuttal")/f'golgi_{path_yellow.stem.partition("_")[2]}.tif'
-    
-#     list_in.append(path_yellow)
-#     list_cell.append(path_cell)
-#     list_out.append(path_golgi)
-#     list_orga.append("golgi")
-#     path_red = Path("images/raw/paperRebuttal")/f"unmixed-red_{path_cell.stem.partition('_')[2]}.nd2"
-#     path_mitochondria = Path("images/preprocessed/paperRebuttal")/f'mitochondria_{path_red.stem.partition("_")[2]}.tif'
-#     list_in.append(path_red)
-#     list_cell.append(path_cell)
-#     list_out.append(path_mitochondria)
-#     list_orga.append("mitochondria")
-#     path_LD = Path("images/preprocessed/paperRebuttal")/f'LD_{path_red.stem.partition("_")[2]}.tif'
-#     list_in.append(path_red)
-#     list_cell.append(path_cell)
-#     list_out.append(path_LD)
-#     list_orga.append("LD")   
-# args = pd.DataFrame({
-#     "path_in": list_in,
-#     "path_cell": list_cell,
-#     "path_out": list_out,
-#     "organelle": list_orga
-# })
-# batch_apply(preprocess_yellowNred,args)

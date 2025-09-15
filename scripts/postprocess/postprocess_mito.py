@@ -6,18 +6,6 @@ from skimage import io,util,measure
 from organelle_measure.tools import batch_apply
 from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
-### Obsolete fnc to read in h5py file type
-# import h5py
-# def postprocess_mito(path_in,path_out):
-#     with h5py.File(str(path_in),'r') as f_in:
-#         img_in = f_in["exported_data"][:]
-#     img_in = (img_in[1]>img_in[0])
-#     img_out = measure.label(img_in)
-#     io.imsave(
-#         str(path_out),
-#         util.img_as_uint(img_out)
-#     )
-#     return None
 
 def postproc_mito(path_in,path_out):
     bkgdprob=io.imread(str(path_in))

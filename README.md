@@ -44,72 +44,36 @@
 ## File Structure
 
 - `organelle_measure/`
-    - reusable scripts used by notebooks and scripts.
-- `notebooks/`: playground to try new methods
-    - `notebook1.py`
-    - `notebook2.py`
-    - ... 
+    - reusable scripts used by notebooks and scripts folder items.
+- `notebooks/`: playground to try new methods; comprised of jupyter notebooks.
 - `scripts/`: scripts to batch process the images. Often uses `batch_apply()` function in `organelle_measure/`
-    - `postprocess_vacuole_allround1data.py`
-    - ...
-- `test/`: files need by `notebooks/`
-- `images/`
-    - `raw/`: read-only microscopy images, ignored by git and synced by another software
-        - `EYrainbow_glucose_largerBF`
-        - `EYrainbowWhi5Up_betaEstrodiol`
-        - `EYrainbow_leucine_large`
-        - `EYrainbow_1nmpp1_1st`
-        - `EYrainbow_rapamycin_1stTry`
-        - `EYrainbow_rapamycin_CheckBistability`
-            - `camera-{before/after}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-            - ...
-            - `spectral-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-            - ...
-            - `unmixed-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-            - ...
+- `test/`: files need by `notebooks/`. Ignored by git. 
+- `images/` Contains images at all stages of processing. Ignored by git.
+    - `raw/`: 
+        - `{capture setting}_{strain}_{condition}_{field}.nd2` mixed hyperspectral images
+            e.g., `BF_haprbow_glucose-2.0_fov1.nd2` or `L1_haprbow_glucose-1.0_fov2.nd2`
+            where BF = bright-field camera and L1 = Scope Launch 1 Capture of three organelles.
+        - `{organelle}_{strain}_{condition}_{field}.nd2` unmixed (single-org profile) images
+            e.g., `mt_haprbow_glucose-2.0_fov1.nd2`
+            where mt refers to mitochondria.
+
+        Previous naming conventions:
+        - `camera-{before/after}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
+        - `spectral-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
+        - `unmixed-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
     - `cell/`
-        - `EYrainbow_glucose_largerBF`
-        - `EYrainbowWhi5Up_betaEstrodiol`
-        - `EYrainbow_leucine_large`
-        - `EYrainbow_1nmpp1_1st`
-        - `EYrainbow_rapamycin_1stTry`
-        - `EYrainbow_rapamycin_CheckBistability`
-            - `binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-            - ...
+        - `binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
     - `preprocessed/`
-        - `EYrainbow_glucose_largerBF`
-        - `EYrainbowWhi5Up_betaEstrodiol`
-        - `EYrainbow_leucine_large`
-        - `EYrainbow_1nmpp1_1st`
-        - `EYrainbow_rapamycin_1stTry`
-        - `EYrainbow_rapamycin_CheckBistability`
-            - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-            - ...
-            - `probability_{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-            - ...
-        - `leucine-large-blue-gaussian`
-            - `probability_spectral-blue_EYrainbow_leu-0_hour-3,field-{f}.h5`
-            - ...
+        - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
+        - `probability_{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
     - `labelled/`
-        - `EYrainbow_glucose_largerBF`
-        - `EYrainbowWhi5Up_betaEstrodiol`
-        - `EYrainbow_leucine_large`
-        - `EYrainbow_1nmpp1_1st`
-        - `EYrainbow_rapamycin_1stTry`
-        - `EYrainbow_rapamycin_CheckBistability`
-            - `label-{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tiff`
-- `data/`: output of the pipeline, ignored by git and synced by another software
+        - `label-{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tiff`
+- `data/`: output of the pipeline, ignored by git.
     - `ilastik/`: ilastik projects used to segment the images
     - `results/`
-        - `EYrainbow_glucose_largerBF`
-        - `EYrainbowWhi5Up_betaEstrodiol`
-        - `EYrainbow_leucine_large`
-        - `EYrainbow_1nmpp1_1st`
-        - `EYrainbow_rapamycin_1stTry`
-        - `EYrainbow_rapamycin_CheckBistability`
-            - `cell_EYrainbow_{experiment}-{condition}_field-{f}.csv`
-            - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.csv`
-    - `figures/`
+        - `cell_EYrainbow_{experiment}-{condition}_field-{f}.csv`
+        - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.csv`
+    - `figures/` 
     - `spectra/`
     - ...
 
@@ -119,24 +83,22 @@
 It should be a `pandas.DataFrame`, whose columns are the keyword arguments to the batch-applied function, while each row is an input.
 
 1. Segment, label, and register cell masks:
-    1. Every experiment other than "EYrainbow_leucine_large"
-        - Script: `segment_cell.py`
-        - Inputs: bright field camera images of the cell boundaries.
-            - `int12(Y,X)`
+    - Script: `segment_cell.py`
+    - Inputs: bright field camera images of the cell boundaries.
+        - `int12(Y,X)`
             - `images/raw/{Experiment}/camera_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-        - Outputs: label image of different cells, registered to the FOV of the confocal detector 
-            - `uint16(Y,X)`
-            - `images/cell/{Experiment}/binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
+    - Outputs: label image of different cells, registered to the FOV of the confocal detector 
+        - `uint16(Y,X)`
+        - `images/cell/{Experiment}/binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
 2. Preprocess organelle images:
     1. peroxisome and vacuole:
-        1. If not "EYrainbow_leucine_large"
-            - Script: `preprocess_blue.py`
-            - Inputs: Unmixed ND2 image of peroxisomes and vacuoles, as 2 channels in the same image
-                - `int12(2,Z,Y,X)`, 
-                - `images/raw/{Experiment}/unmixed-blue_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-            - Outputs: TIF labelled images of organelles, each organelle are saves in a separated image.
-                - `uint16(Z,Y,X)`
-                - `images/preprocessed/{Experiment}/{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
+        - Script: `preprocess_blue.py`
+        - Inputs: Unmixed ND2 image of peroxisomes and vacuoles, as 2 channels in the same image
+            - `int12(2,Z,Y,X)`, 
+            - `images/raw/{Experiment}/unmixed-blue_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
+        - Outputs: TIF labelled images of organelles, each organelle are saves in a separated image.
+            - `uint16(Z,Y,X)`
+            - `images/preprocessed/{Experiment}/{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
     2. ER
         - Script: `preprocess_green.py`
         - Inputs: ND2 confocal image of ER, single channel

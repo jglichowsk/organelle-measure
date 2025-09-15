@@ -5,13 +5,12 @@
 #     4. Parse experiment details for Excel labelling. 
 
 ## Master path to experiment images
-master_path = r'C:/Users/jglic/OneDrive - Washington University in St. Louis/Documents/School/WashU/Mukherji Lab/Experiment Images'
-
+master_path = 
 ## Extension to folder of desired experiment. At the end of this path should be folders of different conditions for the given species.
-experiment_path  = r'rbow knockouts/512'
+experiment_path  = 
 
 ## List of experiment folders to operate on. Can take all folders in designated path or specify a subset.
 import os
 # folders_list = [f for f in os.listdir(str(master_path+'/'+experiment_path))]
-folders_list=['6-26_DNM1', '6-28_FZO1', '6-28_RTN1']
+# folders_list=['6-26_DNM1', '6-28_FZO1', '6-28_RTN1']
 # folders_list=['insert folder names here']

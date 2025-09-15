@@ -47,25 +47,3 @@ args = pd.DataFrame({
 batch_apply(preprocess_blue,args)
 
 # %%
-### Rebuttal Experiment: Glucose Perturbation for 8 Hours
-# list_in   = []
-# list_out  = []
-# list_orga = []
-
-# for path_in in (Path("images/raw/paperRebuttal")).glob("unmixed-blue*.nd2"):
-#     path_peroxisome = Path("images/preprocessed/paperRebuttal")/f'peroxisome_{path_in.stem.partition("_")[2]}.tif'
-#     list_in.append(path_in)
-#     list_out.append(path_peroxisome)
-#     list_orga.append("peroxisome")
-
-#     path_vacuole = Path("images/preprocessed/paperRebuttal")/f'vacuole_{path_in.stem.partition("_")[2]}.tif'
-#     list_in.append(path_in)
-#     list_out.append(path_vacuole)
-#     list_orga.append("vacuole")
-
-# args = pd.DataFrame({
-#     "path_in": list_in,
-#     "path_out": list_out,
-#     "organelle": list_orga
-# })
-# batch_apply(preprocess_blue,args)
