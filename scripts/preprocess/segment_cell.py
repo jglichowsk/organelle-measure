@@ -1,17 +1,17 @@
 # %%
+import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import segmentation,measure,io,util
 from organelle_measure.yeaz import yeaz_preprocesses,yeaz_label
 from organelle_measure.tools import load_nd2_plane,batch_apply
-from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
 
 def segment_cells(path_in,path_out):
     img_i = load_nd2_plane(str(path_in),frame='yx',axes='t',idx=0)
     for prep in yeaz_preprocesses: #applies the affine transform and pixel scaling to align wide-field and confocal images. 
         img_i = prep(img_i)
-    img_b = yeaz_label(img_i,min_dist=5) #applies YeaZ without GUI, using min pixel distance of 5 px. 
+    img_b = yeaz_label(img_i,min_dist=5) #applies YeaZ without GUI, using user-set min pixel distance — currently 5 px. 
     img_b = segmentation.clear_border(img_b) #clear objects touching the image border. 
     properties = measure.regionprops(img_b) #measures properties of each labelled region (here, cells) such as area, centroid, etc. 
     for prop in properties: #Omit those cells below a certain area threshold by setting them to be background.
@@ -52,4 +52,4 @@ args = pd.DataFrame({
 
 batch_apply(segment_cells,args)
 
-# %%
+# %% 

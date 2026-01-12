@@ -16,8 +16,9 @@ yeaz_preprocesses = [
     lambda x: transform.rotate(x,90),
     lambda x: transform.rescale(x,0.25),
     lambda x: transform.warp(x,transf_affine),
-    lambda x: (x-x.min())/(x.max()-x.min())
+    lambda x: (x-x.min())/(x.max()-x.min()) #rescaling image; outputs pixel values between [0,1] corresponding to [min, max].
 ] #makes use of lambda function to iteratively apply these various processes to each input image. 
+
 
 def yeaz_label(img_i,min_dist,**kwargs):
     """

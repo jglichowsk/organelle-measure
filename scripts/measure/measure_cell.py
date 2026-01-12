@@ -11,56 +11,58 @@ def parse_meta_cell(name):
     #assign various labels according to file naming convention.
     labels=name.split('_')
     experiment=labels[1]
-    condition=labels[2]
-    field=labels[3]  
+    # condition=labels[2]
+    field=labels[2]  
+    #then save as dictionary
     return {
         "experiment": experiment,
-        "condition":  condition,
-        "hour":       3,
+        # "condition":  condition,
+        # "hour":       3,
         "field":      field,
     }
 
 def measure1cell(path_in,path_out):
-    img_cell = io.imread(str(path_in))
-    name = Path(path_in).stem
-    meta = parse_meta_cell(name)
+    img_cell = io.imread(str(path_in)) #read in segmentation mask file
+    name = Path(path_in).stem #extract file name from path
+    meta = parse_meta_cell(name) #parse metadata details from file name
+    #extract the following metrics from cells within fov.
     measured = measure.regionprops_table(
                     img_cell,
                     properties=('label','area','centroid','bbox','eccentricity') ### image_intensity returns ndarray of pixels inside bounding box
                )                                                                 ### similarly intensity_mean and intensity_std except those return floats.
-    result = meta | measured
-    df = pd.DataFrame(result)
-    df.rename(columns={'label':'idx-cell'},inplace=True)
-    df.to_csv(str(path_out),index=False)
+    result = meta | measured #merge file metadata and extracted metrics
+    df = pd.DataFrame(result) #convert table to datafram
+    df.rename(columns={'label':'idx-cell'},inplace=True) #rename 'label' column 
+    df.to_csv(str(path_out),index=False) #save dataframe as csv file. 
     return None
 
 # %%
-imgs= master_path #path to experiment images folder
-exp= experiment_path #path to desired experiment and images
-folders= folders_list #list of experiment folders to operate on. 
+# imgs= master_path #path to experiment images folder
+# exp= experiment_path #path to desired experiment and images
+# folders= folders_list #list of experiment folders to operate on. 
 
-list_in = []
-list_out = []
+# list_in = []
+# list_out = []
 
-for folder in folders:
-    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/cell_measure')):
-        print('Creating folder.')
-        os.makedirs(newpath)
-    else:
-        print(str(folder+'/cell_measure'),'already there.')
+# for folder in folders:
+#     if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/cell_measure')):
+#         print('Creating folder.')
+#         os.makedirs(newpath)
+#     else:
+#         print(str(folder+'/cell_measure'),'already there.')
 
-    for path_in in (Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))).glob("binCell*.tif"):
-        path_out = Path(str(imgs+'/'+exp+'/'+folder+'/cell_measure'))/f"{path_in.stem.partition('-')[2]}.csv"
-        list_in.append(path_in)
-        list_out.append(path_out)
+#     for path_in in (Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))).glob("binCell*.tif"):
+#         path_out = Path(str(imgs+'/'+exp+'/'+folder+'/cell_measure'))/f"{path_in.stem.partition('-')[2]}.csv"
+#         list_in.append(path_in)
+#         list_out.append(path_out)
 
 
-args = pd.DataFrame({
-    "path_in":   list_in,
-    "path_out":  list_out
-})
+# args = pd.DataFrame({
+#     "path_in":   list_in,
+#     "path_out":  list_out
+# })
 
-batch_apply(measure1cell,args)
+# batch_apply(measure1cell,args)
 
 # %%
 
