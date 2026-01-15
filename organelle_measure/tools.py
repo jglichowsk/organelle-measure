@@ -5,7 +5,6 @@ from pathlib import Path
 from scipy import ndimage as ndi
 from skimage import io,morphology,measure,segmentation
 
-
 # BEGIN of ND2reader wrapper:
 from nd2reader import ND2Reader
 
@@ -212,6 +211,3 @@ def batch_apply(func,args:pd.DataFrame):
     args["RESULT"] = pd.Series(results)
     args["ERR_MESSAGES"] = pd.Series(errmsgs)
     return None
-
-
-# %%

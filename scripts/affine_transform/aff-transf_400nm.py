@@ -1,8 +1,9 @@
+# %%
 #all we're doing is rotating and rescaling the camera image to align with those from the confocal detector(s)
 import numpy as np
 from skimage import transform,util,io
-# from organelle_measure.tools import load_nd2_plane
-
+from tools import load_nd2_plane
+# %%
 #Read in camera image to be transformed.
 # path_in = input() #path of image file to transform.
 path_in=r'C:\Users\jglic\OneDrive - Washington University in St. Louis\Documents\School\WashU\Mukherji Lab\Experiment Images\haploids\live imaging\11-5-25 myo1-mLemon\Run_2\20251105_133056_851__ChannelEmpty_Seq0000.tif'

@@ -4,9 +4,15 @@ import pandas as pd
 from pathlib import Path
 from skimage import io,measure, util
 # from organelle_measure.tools import batch_apply
-# from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
-
-
+import sys 
+sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
+from pathing_variables import expmt_path
+# %% 
+orgmask_dir=Path(expmt_path+'/postprocess')
+cellmask_dir=Path(expmt_path+'/cell_mask')
+# for path_cell in Path(cellmask_dir).glob(*tif):
+#     measure1organelle(,)
+# %%
 #List of organelle abbreviations that are used in file naming convention.
 organelles = [
     "px",
@@ -18,7 +24,9 @@ organelles = [
 ]
 
 def parse_meta_organelle(name):
-    """name is the stem of the ORGANELLE label image file."""
+    """
+    name is the stem of the ORGANELLE label image file.
+    """
     #assign various labels according to file naming convention.
     organelle = name.partition("_")[0]
     labels=name.split('_')
@@ -34,15 +42,19 @@ def parse_meta_organelle(name):
         "organelle":  organelle
     }
 
-def measure1organelle(path_in,path_cell,path_out,metadata=None):
+def measure1organelle(path_org,path_cell,path_out,metadata=None):
+    """
+    #Args: File paths for organelle mask, cell mask, and output save location.
+    #Outputs: Saves designated metrics to csv file at the location of path_out.
+    """
     # parse metadata from filename
-    name = Path(path_in).stem
+    name = Path(path_org).stem
     if metadata is None:
         meta = parse_meta_organelle(name)
     else:
         meta = metadata
 
-    img_orga = io.imread(str(path_in)) #read in organelle and cell mask files
+    img_orga = io.imread(str(path_org)) #read in organelle and cell mask files
     img_cell = io.imread(str(path_cell))
     if img_cell.shape[0]>1: #if the segmentation file is a time lapse...
         img_cell=img_cell[0,:,:].astype(int) #take the first frame.
@@ -103,12 +115,11 @@ def measure1organelle(path_in,path_cell,path_out,metadata=None):
     df_orga.to_csv(str(path_out),index=False) #save dataframe as csv file
     print(f">>> finished {path_out}.") #send completion message. 
     return None
-
 # %%
-pi=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\ld_erg6-sec61_fov1_mask.tiff'
-pc=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_cell-segm.tif'
-po=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_org-stats.csv'
-measure1organelle(pi,pc,po)
+# pi=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\ld_erg6-sec61_fov1_mask.tiff'
+# pc=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_cell-segm.tif'
+# po=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_ld-stats.csv'
+# measure1organelle(pi,pc,po)
 # %%
 # list_in=[]; list_cell=[]; list_out=[]; #path lists for function batch process. In=organelle, cell=BF segmented tif, out=export path.
 
@@ -138,5 +149,3 @@ measure1organelle(pi,pc,po)
 # })
 
 # batch_apply(measure1organelle,args)
-
-# %%

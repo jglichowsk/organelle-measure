@@ -3,41 +3,43 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import util,io,filters
-from organelle_measure.tools import open_organelles,neighbor_mean,batch_apply
-from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
+import sys 
+sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
+from pathing_variables import expmt_path
+from tools import open_organelles,neighbor_mean,batch_apply
 
-def preprocess_blue(path_in,path_out,organelle):
-    img_raw   = open_organelles[organelle](str(path_in))
+def preprocess_blue(path_in: str,path_out: str,organelle: str):
+    """
+    Args: File path to raw image, where to save processed image, organelle identifier
+    Outputs: None; saves processed image to desginated location.
+    """
+    img_raw=open_organelles[organelle](str(path_in))
     img_gaussian = filters.gaussian(img_raw,sigma=0.75,preserve_range=True).astype(int)
     io.imsave(str(path_out),util.img_as_uint(img_gaussian))
     return None
 
-# %%
 list_in   = [] #spectral/confocal images
 list_out  = [] #output destination
-list_orga = [] #organelle label to diff. between the three (Golgi, LD, mito)
+list_orga = [] #organelle label to differentiate between the peroxisome and vacuoles
 
-imgs= master_path #path to experiment images folder
-exp= experiment_path #path to desired experiment and images
-folders= folders_list #list of experiment folders to operate on. 
+if not os.path.exists(newpath:=Path(expmt_path+'/preprocess')):
+    print('Creating folder ',str(expmt_path+'/preprocess'))
+    os.makedirs(newpath)
 
-print("Creating folder as needed.")
-for folder in folders:
-    if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/preprocess')):
-        print('Creating',str(folder+'/preprocess'))
-        os.makedirs(newpath)
-    else:
-        print(str(folder+'/preprocess'),'already there.')
-    for path_in in (Path(str(imgs+'/'+exp+'/'+folder+'/raw'))).glob("CFP*unmixed.nd2"):
-        path_peroxisome = Path(str(imgs+'/'+exp+'/'+folder+'/preprocess'))/f'peroxisome_{path_in.stem.partition("_")[2][:-8]}.tif'
-        list_in.append(path_in)
-        list_out.append(path_peroxisome)
-        list_orga.append("peroxisome")
+for path_in in (Path(expmt_path+'/raw')).glob("CFP*unmixed.nd2"): ###TO UPDATE
+    path_parts=path_in.stem.partition("_")
+    date=path_parts[0]
+    path_end="_".join(path_parts[1:])
 
-        path_vacuole = Path(str(imgs+'/'+exp+'/'+folder+'/preprocess'))/f'vacuole_{path_in.stem.partition("_")[2][:-8]}.tif'
-        list_in.append(path_in)
-        list_out.append(path_vacuole)
-        list_orga.append("vacuole")
+    path_px = Path(expmt_path+'/preprocess'+date)/f'px_{path_end}.tif'
+    list_in.append(path_in)
+    list_out.append(path_px)
+    list_orga.append("px")
+
+    path_vo = Path(expmt_path+'/preprocess'+date)/f'vo_{path_end}.tif'
+    list_in.append(path_in)
+    list_out.append(path_vo)
+    list_orga.append("vo")
 args = pd.DataFrame({
     "path_in": list_in,
     "path_out": list_out,

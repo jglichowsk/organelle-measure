@@ -7,8 +7,8 @@ from skimage import segmentation,measure,io,util
 from organelle_measure.yeaz import yeaz_preprocesses,yeaz_label
 from organelle_measure.tools import load_nd2_plane,batch_apply
 
-def segment_cells(path_in,path_out):
-    img_i = load_nd2_plane(str(path_in),frame='yx',axes='t',idx=0)
+def segment_cells(path_in:str,path_out:str):
+    img_i = load_nd2_plane(path_in,frame='yx',axes='t',idx=0)
     for prep in yeaz_preprocesses: #applies the affine transform and pixel scaling to align wide-field and confocal images. 
         img_i = prep(img_i)
     img_b = yeaz_label(img_i,min_dist=5) #applies YeaZ without GUI, using user-set min pixel distance — currently 5 px. 
@@ -27,29 +27,27 @@ def segment_cells(path_in,path_out):
     return None
 
 # %%
-list_in = []
-list_out = []
+# list_in = []
+# list_out = []
 
-imgs= master_path #path to experiment images folder
-exp= experiment_path #path to desired experiment and images
-folders= folders_list #list of experiment folders to operate on. 
+# imgs= master_path #path to experiment images folder
+# exp= experiment_path #path to desired experiment and images
+# folders= folders_list #list of experiment folders to operate on. 
 
-for folder in folders:
-    if not os.path.exists(newpath:=Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))):
-        print('Creating',str(folder+'/cell_segment'))
-        os.makedirs(newpath)
-    else:
-        print(str(folder+'/cell_segment'),'already there.')
+# for folder in folders:
+#     if not os.path.exists(newpath:=Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment'))):
+#         print('Creating',str(folder+'/cell_segment'))
+#         os.makedirs(newpath)
+#     else:
+#         print(str(folder+'/cell_segment'),'already there.')
 
-    for file_cell in Path(str(imgs+'/'+exp+'/'+folder+'/raw')).glob("BF*_2.nd2"): #taking the "after" BF (i.e. the one captured after spectral imaging)
-        list_in.append(file_cell)
-        file_segm = Path(newpath)/f"binCell-{file_cell.stem[3:-2]}.tif"
-        list_out.append(file_segm)
-args = pd.DataFrame({
-    "path_in":  list_in,
-    "path_out": list_out
-})
+#     for file_cell in Path(str(imgs+'/'+exp+'/'+folder+'/raw')).glob("BF*_2.nd2"): #taking the "after" BF (i.e. the one captured after spectral imaging)
+#         list_in.append(file_cell)
+#         file_segm = Path(newpath)/f"binCell-{file_cell.stem[3:-2]}.tif"
+#         list_out.append(file_segm)
+# args = pd.DataFrame({
+#     "path_in":  list_in,
+#     "path_out": list_out
+# })
 
-batch_apply(segment_cells,args)
-
-# %% 
+# batch_apply(segment_cells,args)
