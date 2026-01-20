@@ -28,15 +28,14 @@ if not os.path.exists(newpath:=Path(expmt_path+'/preprocess')):
 
 for path_in in (Path(expmt_path+'/raw')).glob("CFP*unmixed.nd2"): ###TO UPDATE
     path_parts=path_in.stem.partition("_")
-    date=path_parts[0]
     path_end="_".join(path_parts[1:])
 
-    path_px = Path(expmt_path+'/preprocess'+date)/f'px_{path_end}.tif'
+    path_px = Path(newpath)/f'px_{path_end}.tif'
     list_in.append(path_in)
     list_out.append(path_px)
     list_orga.append("px")
 
-    path_vo = Path(expmt_path+'/preprocess'+date)/f'vo_{path_end}.tif'
+    path_vo = Path(newpath)/f'vo_{path_end}.tif'
     list_in.append(path_in)
     list_out.append(path_vo)
     list_orga.append("vo")

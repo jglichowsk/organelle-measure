@@ -9,7 +9,7 @@ from pathing_variables import expmt_path
 from tools import open_organelles,neighbor_mean,batch_apply
 
 # clean the yellow and red channels
-def preprocess_yellowNred(path_in:str,path_cell:str,path_out:str,organelle:str):
+def preprocess_yellowNred(path_in: str,path_cell: str,path_out: str,organelle: str):
     img_cell  = io.imread(str(path_cell))
     img_raw   = open_organelles[organelle](str(path_in))
     img_bkgd  = neighbor_mean(img_raw,img_cell)
@@ -29,14 +29,14 @@ if not os.path.exists(newpath:=Path(expmt_path+'/preprocess')):
     print('Creating folder ',str(expmt_path+'/preprocess'))
     os.makedirs(newpath)
 
-for path_in in Path(expmt_path+'/cell_masks')).glob("GFP*.nd2"): ###TO UPDATE
+for path_in in Path(expmt_path+'/cell_masks').glob("GFP*.nd2"): ###TO UPDATE
     path_parts=path_in.stem.partition("_")
     date=path_parts[0]
     path_end="_".join(path_parts[1:])
 
-    path_gl = Path(expmt_path+'/preprocess'+date)/f'gl_{path_end}.tif'
-    path_mt = Path(expmt_path+'/preprocess'+date)/f'mt_{path_end}.tif' 
-    path_ld = Path(expmt_path+'/preprocess'+date)/f'ld_{path_end}.tif' 
+    path_gl = Path(newpath)/f'gl_{path_end}.tif'
+    path_mt = Path(newpath)/f'mt_{path_end}.tif' 
+    path_ld = Path(newpath)/f'ld_{path_end}.tif' 
 
 ### TO UPDATE BELOW
     path_yellow = Path(str(imgs+'/'+exp+'/'+folder+'/raw'))/f"YFP_{path_cell.stem.partition('-')[2]}.nd2" 

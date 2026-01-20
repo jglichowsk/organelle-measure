@@ -4,10 +4,13 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import segmentation,measure,io,util
-from organelle_measure.yeaz import yeaz_preprocesses,yeaz_label
-from organelle_measure.tools import load_nd2_plane,batch_apply
+import sys 
+sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
+from pathing_variables import expmt_path
+from yeaz import yeaz_preprocesses,yeaz_label
+from tools import load_nd2_plane,batch_apply
 
-def segment_cells(path_in:str,path_out:str):
+def segment_cells(path_in: str,path_out: str):
     img_i = load_nd2_plane(path_in,frame='yx',axes='t',idx=0)
     for prep in yeaz_preprocesses: #applies the affine transform and pixel scaling to align wide-field and confocal images. 
         img_i = prep(img_i)
