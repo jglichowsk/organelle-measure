@@ -24,7 +24,7 @@ bycell_6color = bycell_6color.loc[
 								 ]
 bycell_6color.rename(
 	columns={
-		"idx-cell"      : "cell-idx",
+		"idx_cell"      : "cell-idx",
 		"cell-volume"   : "cell-volume-um3",
 		"mean"          : "mean-um3",
 		"total"         : "total-um3",

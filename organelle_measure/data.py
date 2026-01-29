@@ -39,7 +39,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
         "condition":  "float",
         "hour":       "int8",
         "field":      "string",
-        "idx-cell":   "int16",
+        "idx_cell":   "int16",
         "area":       "int16",
         "bbox-0":     "int16",
         "bbox-1":     "int16",
@@ -53,7 +53,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
         "hour":         "int8",
         "field":        "string",
         "organelle":    "string",
-        "idx-cell":     "int16",
+        "idx_cell":     "int16",
         "idx-orga":     "int16",
         "volume-pixel": "int16",
         "volume-bbox":  "int16",
@@ -71,7 +71,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
 
     # GROUP BY CELL
     df_cell_all.loc[:,"effective-volume"] = (px_x*px_y)*np.sqrt(px_x*px_y)*(2.)*df_cell_all.loc[:,"area"]*np.sqrt(df_cell_all.loc[:,"area"])/np.sqrt(np.pi) 
-    pivot_cell_bycell = df_cell_all.set_index(["folder","condition","field","idx-cell"])
+    pivot_cell_bycell = df_cell_all.set_index(["folder","condition","field","idx_cell"])
 
     # data (in unit of microns)
     df_orga_all["volume-micron"] = np.empty_like(df_orga_all.index)
@@ -80,13 +80,13 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
     df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-micron"] = (px_x*px_y)*np.sqrt(px_x*px_y)*(2.)*df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-pixel"]*np.sqrt(df_orga_all.loc[df_orga_all["organelle"].eq("vacuole"),"volume-pixel"])/np.sqrt(np.pi) 
     df_orga_all.loc[df_orga_all["organelle"].ne("vacuole"),"volume-micron"] = px_x*px_y*px_z*df_orga_all.loc[df_orga_all["organelle"].ne("vacuole"),"volume-pixel"]
 
-    pivot_orga_bycell_mean = df_orga_all.loc[:,["folder","condition","field","organelle","idx-cell","volume-micron"]].groupby(["folder","condition","field","idx-cell","organelle"]).mean()["volume-micron"]
-    pivot_orga_bycell_nums = df_orga_all.loc[:,["folder","condition","field","organelle","idx-cell","volume-micron"]].groupby(["folder","condition","field","idx-cell","organelle"]).count()["volume-micron"]
-    pivot_orga_bycell_totl = df_orga_all.loc[:,["folder","condition","field","organelle","idx-cell","volume-micron"]].groupby(["folder","condition","field","idx-cell","organelle"]).sum()["volume-micron"]
+    pivot_orga_bycell_mean = df_orga_all.loc[:,["folder","condition","field","organelle","idx_cell","volume-micron"]].groupby(["folder","condition","field","idx_cell","organelle"]).mean()["volume-micron"]
+    pivot_orga_bycell_nums = df_orga_all.loc[:,["folder","condition","field","organelle","idx_cell","volume-micron"]].groupby(["folder","condition","field","idx_cell","organelle"]).count()["volume-micron"]
+    pivot_orga_bycell_totl = df_orga_all.loc[:,["folder","condition","field","organelle","idx_cell","volume-micron"]].groupby(["folder","condition","field","idx_cell","organelle"]).sum()["volume-micron"]
     # index
     index_bycell = pd.MultiIndex.from_tuples(
         [(*index,orga) for index in pivot_cell_bycell.index.to_list() for orga in [*organelles,'non-organelle']],
-        names=['folder','condition','field','idx-cell','organelle']
+        names=['folder','condition','field','idx_cell','organelle']
     )
     pivot_bycell = pd.DataFrame(index=index_bycell)
     # combine data with index
@@ -104,7 +104,7 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
     # calculate properties of regions that are not organelles
     df_bycell = pivot_bycell.reset_index()
 
-    df_none = df_bycell[df_bycell['organelle'].ne("non-organelle")].groupby(['folder','condition','field','idx-cell'])[['total','cell-volume','total-fraction']].agg({'total':'sum','cell-volume':'first','total-fraction':'sum'})
+    df_none = df_bycell[df_bycell['organelle'].ne("non-organelle")].groupby(['folder','condition','field','idx_cell'])[['total','cell-volume','total-fraction']].agg({'total':'sum','cell-volume':'first','total-fraction':'sum'})
     pivot_bycell.loc[pivot_bycell['organelle'].eq("non-organelle"),"count"] = 1
     pivot_bycell.loc[pivot_bycell['organelle'].eq("non-organelle"),"mean"] = df_none["cell-volume"] - df_none["total"]
     pivot_bycell.loc[pivot_bycell['organelle'].eq("non-organelle"),"total"] = df_none["cell-volume"] - df_none["total"]

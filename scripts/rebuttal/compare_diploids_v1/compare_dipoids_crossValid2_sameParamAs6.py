@@ -23,7 +23,7 @@ bycell_6segmented_by6 = bycell_6segmented_by6.loc[
 ]
 bycell_6segmented_by6.rename(
 	columns={
-		"idx-cell"      : "cell-idx",
+		"idx_cell"      : "cell-idx",
 		"cell-volume"   : "cell-volume-um3",
 		"mean"          : "mean-um3",
 		"total"         : "total-um3",
@@ -38,7 +38,7 @@ bycell_6segmented_by6.rename(
 # bycell_8hours = bycell_8hours.loc[bycell_8hours["condition"].eq(100)]
 # bycell_8hours.rename(
 # 	columns={
-# 		"idx-cell"      : "cell-idx",
+# 		"idx_cell"      : "cell-idx",
 # 		"cell-volume"   : "cell-volume-um3",
 # 		"mean"          : "mean-um3",
 # 		"total"         : "total-um3",

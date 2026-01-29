@@ -159,7 +159,7 @@ folder_i = Path("./data/results")
 path_rate = Path("./data/growthrate/growth_rate.csv")
 df_bycell = read_results(folder_i,subfolders,(px_x,px_y,px_z),path_rate=path_rate)
 
-df_bycell.set_index(["folder","condition","field","idx-cell"],inplace=True)
+df_bycell.set_index(["folder","condition","field","idx_cell"],inplace=True)
 idx2learn = df_bycell.loc[df_bycell["organelle"].eq("ER")].index
 df2learn = pd.DataFrame(index=idx2learn)
 col_x = []

@@ -4,7 +4,8 @@ from skimage import transform,util,io
 # from organelle_measure.tools import load_nd2_plane
 
 # path_in = input() #path of image file to transform.
-path_in=r'C:\Users\jglic\Downloads\MAX_BF_zstack-0.1um-step-3um-range_myo1_fov1.tif'
+# path_in=r'C:\Users\jglic\Downloads\1-22-26 myo1-mLemon\BF_01222026_myo1_glucose-2.0_fov1.tif'
+path_in=r'C:\Users\jglic\Downloads\1-22-26 myo1-mLemon\BF_01222026_myo1_glucose-2.0_fov1_slice-16.tif'
 img_in=io.imread(str(path_in)) #load in bright-field time series.
 
 #optimized affine transform params from 1024 & 512 reference images.

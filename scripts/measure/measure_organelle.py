@@ -23,29 +23,25 @@ organelles = [
     "vo"
 ]
 
-def parse_meta_organelle(name):
+def parse_meta_organelle(name: str):
     """
-    name is the stem of the ORGANELLE label image file.
+    Args: Name is the stem of the ORGANELLE label image file.
+    Outptuts: Dictionary containing experiment metadata
     """
-    #assign various labels according to file naming convention.
-    organelle = name.partition("_")[0]
-    labels=name.split('_')
-    experiment=labels[1]
-    # condition=labels[3]
-    field=labels[2]     
-    #then save as dictionary
+    #Unpack experiment metadata according to file naming convention.
+    organelle,date,strain,condition,field=name.split('_')
     return {
-        "experiment": experiment,
-        # "condition":  condition,
-        # "hour":       3,
-        "field":      field,
-        "organelle":  organelle
+        "organelle":  organelle,
+        "date":       date,
+        "strain":     strain,
+        "condition":  condition,
+        "field":      field
     }
 
-def measure1organelle(path_org,path_cell,path_out,metadata=None):
+def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
     """
-    #Args: File paths for organelle mask, cell mask, and output save location.
-    #Outputs: Saves designated metrics to csv file at the location of path_out.
+    Args: File paths for organelle mask, cell mask, and output save location.
+    Outputs: Saves designated metrics to csv file at the location of path_out.
     """
     # parse metadata from filename
     name = Path(path_org).stem
@@ -54,14 +50,15 @@ def measure1organelle(path_org,path_cell,path_out,metadata=None):
     else:
         meta = metadata
 
-    img_orga = io.imread(str(path_org)) #read in organelle and cell mask files
+    #read in organelle and cell mask files
+    img_orga = io.imread(str(path_org)) 
     img_cell = io.imread(str(path_cell))
-    if img_cell.shape[0]>1: #if the segmentation file is a time lapse...
+    if img_cell.shape[0]>1: #if the cell segmentation file is a time lapse...
         img_cell=img_cell[0,:,:].astype(int) #take the first frame.
 
     dfs = [] #initialize list for dataframe output
     for cell in measure.regionprops(img_cell): #for each cell in the cell mask image...
-        meta["idx-cell"] = cell.label #read out cell-ID
+        meta["idx_cell"] = cell.label #read out cell-ID
         min_row, min_col, max_row, max_col = cell.bbox #extract bounding box details
         img_orga_crop = img_orga[:,min_row:max_row,min_col:max_col] #crop organelle image to just include given cell
         img_cell_crop = cell.image #same crop but for cell image

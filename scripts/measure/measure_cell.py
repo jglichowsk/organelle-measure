@@ -32,7 +32,7 @@ def measure1cell(path_in,path_out):
                )                                                                 ### similarly intensity_mean and intensity_std except those return floats.
     result = meta | measured #merge file metadata and extracted metrics
     df = pd.DataFrame(result) #convert table to datafram
-    df.rename(columns={'label':'idx-cell'},inplace=True) #rename 'label' column 
+    df.rename(columns={'label':'idx_cell'},inplace=True) #rename 'label' column 
     df.to_csv(str(path_out),index=False) #save dataframe as csv file. 
     return None
 

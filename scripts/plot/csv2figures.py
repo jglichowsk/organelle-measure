@@ -67,7 +67,7 @@ df_bycell = read_results(imgs+'/'+exp,folders,(px_x,px_y,px_z))
 
 #%%  # DATAFRAME FOR CORRELATION COEFFICIENT
 
-pv_bycell = df_bycell.set_index(['folder','condition','field','idx-cell'])
+pv_bycell = df_bycell.set_index(['folder','condition','field','idx_cell'])
 df_corrcoef = pd.DataFrame(index=pv_bycell.loc[pv_bycell["organelle"].eq("ER")].index)
 df_corrcoef.loc[:,'cell length'] = np.sqrt(pv_bycell.loc[pv_bycell["organelle"].eq("ER"),'cell-area']/np.pi)
 df_corrcoef.loc[:,'cell area'] = pv_bycell.loc[pv_bycell["organelle"].eq("ER"),'cell-area']
@@ -450,7 +450,7 @@ df_bycell.set_index(["folder","condition"],inplace=True)
 df_bycell["growth_rate"] = df_rates["growth_rate"]
 df_bycell.reset_index(inplace=True)
 
-df_bycell.set_index(["folder","condition","field","idx-cell"],inplace=True)
+df_bycell.set_index(["folder","condition","field","idx_cell"],inplace=True)
 idx_fraction_bycell = df_bycell[df_bycell["organelle"].eq("ER")].index
 df_fraction_bycell  = pd.DataFrame(index=idx_fraction_bycell)
 for orga in [*organelles,"non-organelle"]:
@@ -608,8 +608,8 @@ def make_pca_plots(experiment,property,groups=None,has_volume=False,is_normalize
     print("PCA Anaysis: ",folder,name)
 
     df_orga_perfolder = df_bycell[df_bycell["folder"].eq(folder)]
-    df_orga_perfolder.set_index(["condition","field","idx-cell"],inplace=True)
-    idx = df_orga_perfolder.groupby(["condition","field","idx-cell"]).count().index
+    df_orga_perfolder.set_index(["condition","field","idx_cell"],inplace=True)
+    idx = df_orga_perfolder.groupby(["condition","field","idx_cell"]).count().index
     
     columns = [*organelles,"non-organelle"] if non_organelle else organelles
     df_pca = pd.DataFrame(index=idx,columns=columns)
