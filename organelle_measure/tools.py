@@ -66,12 +66,12 @@ def open_LD(path):
             img_raw[z] = img[2*z+1]
         return img_raw
 open_organelles = {
-    "peroxisome":   lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=0).astype(int),
-    "vacuole":      lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=1).astype(int),
-    "ER":           open_ER,
-    "golgi":        open_golgi,
-    "mitochondria": open_mito,
-    "LD":           open_LD
+    "px": lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=0).astype(int),
+    "vo": lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=1).astype(int),
+    "er": open_ER,
+    "gl": open_golgi,
+    "mt": open_mito,
+    "ld": open_LD
 }
 # END of organelle nd2 file opener
 
@@ -197,7 +197,7 @@ def neighbor_mean(img_orga,img_cell):
             img_out[tuple(idx.T)] = background
     return img_out
 
-def batch_apply(func,args:pd.DataFrame):
+def batch_apply(func,args):
     results = []
     errmsgs  = []
     for entry in args.iterrows():

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from skimage import io,measure
 from organelle_measure.tools import batch_apply
-from organelle_measure.pathing_vars import master_path, experiment_path, folders_list
+from organelle_measure.pathing_vars import expmt_path
 
 def parse_meta_cell(name):
     """name is the stem of the ORGANELLE label image file."""

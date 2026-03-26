@@ -4,4 +4,8 @@
 #     3. Create folders when needed.
 #     4. Parse experiment details for Excel labelling. 
 
-expmt_path=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid'
+expmt_path=r'C:\Users\jglic\Downloads\3-4-26 eyrbow'
+green_tag='eyrbow-green'
+red_tag='eyrbow-red'
+yellow_tag='eyrbow-yellowconf'
+blue_tag='eyrbow-blue'

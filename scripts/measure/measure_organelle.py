@@ -3,16 +3,12 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import io,measure, util
-# from organelle_measure.tools import batch_apply
-import sys 
+import os
+import sys
 sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
 from pathing_variables import expmt_path
-# %% 
-orgmask_dir=Path(expmt_path+'/postprocess')
-cellmask_dir=Path(expmt_path+'/cell_mask')
-# for path_cell in Path(cellmask_dir).glob(*tif):
-#     measure1organelle(,)
-# %%
+from tools import batch_apply
+
 #List of organelle abbreviations that are used in file naming convention.
 organelles = [
     "px",
@@ -28,14 +24,16 @@ def parse_meta_organelle(name: str):
     Args: Name is the stem of the ORGANELLE label image file.
     Outptuts: Dictionary containing experiment metadata
     """
-    #Unpack experiment metadata according to file naming convention.
-    organelle,date,strain,condition,field=name.split('_')
+    #Unpack experiment metadata according to file naming convention. Field is fov #, and time is pre- or post-BF capture.
+    organelle,date,strain,condition,field_time,label=name.split('_')
+    field,time=field_time.split('-')
     return {
         "organelle":  organelle,
         "date":       date,
         "strain":     strain,
         "condition":  condition,
-        "field":      field
+        "field":      field,
+        "time":       time
     }
 
 def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
@@ -53,8 +51,14 @@ def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
     #read in organelle and cell mask files
     img_orga = io.imread(str(path_org)) 
     img_cell = io.imread(str(path_cell))
+
     if img_cell.shape[0]>1: #if the cell segmentation file is a time lapse...
-        img_cell=img_cell[0,:,:].astype(int) #take the first frame.
+        if meta['time']=='pre':
+            img_cell=img_cell[0,:,:].astype(int) #take the first frame for overlay.
+        elif meta['time']=='post':
+            img_cell=img_cell[-1,:,:].astype(int) #take the last frame for overlay.
+        else:
+            print('File tag not recognized. Please verify that the input masks have the correct naming convention.')        
 
     dfs = [] #initialize list for dataframe output
     for cell in measure.regionprops(img_cell): #for each cell in the cell mask image...
@@ -110,39 +114,40 @@ def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
     df_orga = pd.concat(dfs,ignore_index=True) #join all single-cell dataframes outputted. 
     df_orga.rename(columns={'label':'idx-orga',"area":"volume-pixel",'bbox_area':'volume-bbox'},inplace=True) #some column labelling
     df_orga.to_csv(str(path_out),index=False) #save dataframe as csv file
-    print(f">>> finished {path_out}.") #send completion message. 
+    print(f"Finished {path_out}.") #send completion message. 
     return None
 # %%
-# pi=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\ld_erg6-sec61_fov1_mask.tiff'
-# pc=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_cell-segm.tif'
-# po=r'C:\Users\jglic\Downloads\12-16-2025 erg6-sec61 haploid\20251216_BF-timelapse_ld-stats.csv'
-# measure1organelle(pi,pc,po)
+
+list_in   = [] #Initialize lists for org masks, cell masks, and output paths respectively. 
+list_cell = []
+list_out  = []
+
+if not os.path.exists(newpath:=Path(expmt_path+'/org_measure')):
+    print('Creating folder ',str(expmt_path+'/org_measure'))
+    os.makedirs(newpath)
+
+for path_in in Path(expmt_path+'/postprocess').glob('*label.tif'):
+    path_parts=path_in.stem.split("_")
+    path_end="_".join(path_parts[:-1])
+    cell_parts=path_in.stem.split('-')
+    cell_end="-".join(cell_parts[:2])[3:]
+
+    path_cell=Path(expmt_path+'/cell_segment')/f"BF-timelapse_{cell_end}_segm.tif"
+    path_out=Path(newpath)/f'{path_end}.csv'
+
+    list_in.append(path_in)
+    list_cell.append(path_cell)
+    list_out.append(path_out)
+
+args = pd.DataFrame({
+    "path_in":   list_in,
+    "path_cell": list_cell,
+    "path_out":  list_out
+})
+
 # %%
-# list_in=[]; list_cell=[]; list_out=[]; #path lists for function batch process. In=organelle, cell=BF segmented tif, out=export path.
-
-# imgs= master_path #path to experiment images folder
-# exp= experiment_path #path to desired experiment and images
-# folders= folders_list #list of experiment folders to operate on. 
-
-# for folder in folders:
-#     if not os.path.exists(newpath:=Path(imgs+'/'+exp+'/'+folder+'/org_measure')):
-#         print('Creating folder.')
-#         os.makedirs(newpath)
-#     else:
-#         print(str(folder+'/org_measure'),'already there.')
-#     for path_cell in Path(str(imgs+'/'+exp+'/'+folder+'/cell_segment')).glob("*.tif"):
-#             for organelle in organelles:
-#                 path_in = Path(imgs+'/'+exp+'/'+folder+'/postprocess')/f"label-{organelle}_{path_cell.stem.partition('-')[2]}.tiff"
-#                 path_out = Path(str(newpath))/f"{organelle}_{path_cell.stem.partition('-')[2]}.csv"
-
-#                 list_in.append(path_in)
-#                 list_cell.append(path_cell)
-#                 list_out.append(path_out)
-        
-# args = pd.DataFrame({
-#     "path_in":   list_in,
-#     "path_cell": list_cell,
-#     "path_out":  list_out
-# })
-
 # batch_apply(measure1organelle,args)
+for i in range(len(list_in)):
+    measure1organelle(list_in[i],list_cell[i],list_out[i])
+
+# %%

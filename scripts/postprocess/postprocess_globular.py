@@ -28,25 +28,28 @@ list_out=[]
 
 organelles = ["px","ld","gl"]
 
-
 if not os.path.exists(newpath:=Path(expmt_path+'/postprocess')):
     print('Creating folder ',str(expmt_path+'/postprocess'))
     os.makedirs(newpath)
 
-
 for organelle in organelles:
-    for path_in in Path(expmt_path+'/ilastik_prob').glob(f"{organelle}*.tiff"): ##TO UPDATE
-        path_output=Path(newpath+path_in[:-18]+'label.tif')
-        path_ref = (Path(expmt_path+'/preprocess'))/f"{path_in.stem[:-19]}.tif" #######
+    for path_in in Path(expmt_path+'/ilastik_prob').glob(f"{organelle}*.tiff"):
+        path_parts=path_in.stem.split("_")
+        path_end="_".join(path_parts[:-1])
+
+        path_out=Path(newpath)/f'{path_end}_label.tif'
+        path_ref=Path(expmt_path+'/preprocess')/f"{path_end}.tif"
+        # path_output=Path(newpath+path_in.stem[:-18]+'label.tif')
+        # path_ref = (Path(expmt_path+'/preprocess'))/f"{path_in.stem[:-19]}.tif" 
         list_in.append(path_in)
         list_ref.append(path_ref)
-        list_out.append(path_output)
+        list_out.append(path_out)
 args = pd.DataFrame({
     "path_in":  list_in,
     "path_ref": list_ref,
     "path_out": list_out
 })
-
+# %%
 batch_apply(postproc_globular,args)
 
 # %%

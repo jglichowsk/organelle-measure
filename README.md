@@ -50,24 +50,21 @@
 - `test/`: files need by `notebooks/`. Ignored by git. 
 - `images/` Contains images at all stages of processing. Ignored by git.
     - `raw/`: 
-        - `{capture setting}_{strain}_{condition}_{field}.nd2` mixed hyperspectral images
-            e.g., `BF_haprbow_glucose-2.0_fov1.nd2` or `L1_haprbow_glucose-1.0_fov2.nd2`
-            where BF = bright-field camera and L1 = Scope Launch 1 Capture of three organelles.
-        - `{organelle}_{strain}_{condition}_{field}.nd2` unmixed (single-org profile) images
+        - `{capture setting}_{date}_{strain}_{condition}_{field-pre/post}.nd2` mixed hyperspectral images
+            e.g., `BF_03152025_eyrbow_glucose-2.0_fov1-pre.nd2` or `L1_03152025_haprbow_glucose-1.0_fov2-post.nd2`
+            ################################
+        - `{organelle}_{date}_{strain}_{condition}_{field}.nd2` unmixed (single-org profile) images
             e.g., `mt_haprbow_glucose-2.0_fov1.nd2`
-            where mt refers to mitochondria.
 
-        Previous naming conventions:
-        - `camera-{before/after}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-        - `spectral-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
-        - `unmixed-{blue/green/yellow/red}_EYrainbow_{experiment}-{condition}_field-{f}.nd2`
     - `cell/`
-        - `binCell_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-    - `preprocessed/`
-        - `{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-        - `probability_{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tif`
-    - `labelled/`
-        - `label-{organelle}_EYrainbow_{experiment}-{condition}_field-{f}.tiff`
+        - `{capture setting}_{date}_{strain}_{condition}_{field}_cell-segm.tif`
+    - `preprocess/`
+        - `{organelle}_{date}_{strain}_{condition}_{field}.tif`
+    - `ilastik_prob/`
+        - `{organelle}_{date}_{strain}_{condition}_{field-pre/post}_Probabilities.tiff`
+    - `postprocess/`
+        - `label-{organelle}_{date}_{strain}_{condition}_{field-pre/post}.tif`
+        
 - `data/`: output of the pipeline, ignored by git.
     - `ilastik/`: ilastik projects used to segment the images
     - `results/`

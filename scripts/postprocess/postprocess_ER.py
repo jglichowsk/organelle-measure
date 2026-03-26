@@ -28,10 +28,13 @@ if not os.path.exists(newpath:=Path(expmt_path+'/postprocess')):
     print('Creating folder ',str(expmt_path+'/postprocess'))
     os.makedirs(newpath)
 
-for path_in in Path(expmt_path+'/ilastik_prob').glob("er*.tiff"): ##TO UPDATE
-    path_output=Path(newpath+path_in[:-18]+'label.tif')
+for path_in in Path(expmt_path+'/ilastik_prob').glob("er*.tiff"): 
+    path_parts=path_in.stem.split("_")
+    path_end="_".join(path_parts[:-1])
+    path_out=Path(newpath)/f'{path_end}_label.tif'
+
     list_in.append(path_in)
-    list_out.append(path_output)
+    list_out.append(path_out)
 
 args = pd.DataFrame({
     "path_in":  list_in,

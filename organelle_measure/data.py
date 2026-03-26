@@ -6,12 +6,12 @@ def read_results(folder_i,subfolders,pixel_sizes,path_rate=None):
     px_x,px_y,px_z = pixel_sizes
 
     organelles = [
-        "peroxisome",
-        "vacuole",
-        "ER",
-        "golgi",
-        "mito",
-        "LD"
+        "px",
+        "vo",
+        "er",
+        "gl",
+        "mt",
+        "ld"
     ]
 
 

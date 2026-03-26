@@ -3,9 +3,10 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from skimage import util,io,filters
+import os
 import sys 
 sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
-from pathing_variables import expmt_path
+from pathing_variables import expmt_path, blue_tag
 from tools import open_organelles,neighbor_mean,batch_apply
 
 def preprocess_blue(path_in: str,path_out: str,organelle: str):
@@ -14,7 +15,7 @@ def preprocess_blue(path_in: str,path_out: str,organelle: str):
     Outputs: None; saves processed image to desginated location.
     """
     img_raw=open_organelles[organelle](str(path_in))
-    img_gaussian = filters.gaussian(img_raw,sigma=0.75,preserve_range=True).astype(int)
+    img_gaussian = filters.gaussian(img_raw,sigma=0.5,preserve_range=True).astype(int)
     io.imsave(str(path_out),util.img_as_uint(img_gaussian))
     return None
 
@@ -26,16 +27,16 @@ if not os.path.exists(newpath:=Path(expmt_path+'/preprocess')):
     print('Creating folder ',str(expmt_path+'/preprocess'))
     os.makedirs(newpath)
 
-for path_in in (Path(expmt_path+'/raw')).glob("CFP*unmixed.nd2"): ###TO UPDATE
+for path_in in (Path(expmt_path+'/raw')).glob(f'{blue_tag}*unmixed.nd2'): ###TO UPDATE
     path_parts=path_in.stem.partition("_")
-    path_end="_".join(path_parts[1:])
+    path_end="".join(path_parts[1:])
 
-    path_px = Path(newpath)/f'px_{path_end}.tif'
+    path_px = Path(newpath)/f'px{path_end[:-8]}.tif'
     list_in.append(path_in)
     list_out.append(path_px)
     list_orga.append("px")
 
-    path_vo = Path(newpath)/f'vo_{path_end}.tif'
+    path_vo = Path(newpath)/f'vo{path_end[:-8]}.tif'
     list_in.append(path_in)
     list_out.append(path_vo)
     list_orga.append("vo")
@@ -44,7 +45,7 @@ args = pd.DataFrame({
     "path_out": list_out,
     "organelle": list_orga
 })
-
+# %%
 batch_apply(preprocess_blue,args)
 
 # %%
