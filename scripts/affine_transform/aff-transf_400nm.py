@@ -6,10 +6,10 @@ from skimage import transform,util,io
 # %%
 #Read in camera image to be transformed.
 # path_in = input() #path of image file to transform.
-# path_in=r'C:\Users\jglic\Downloads\2-27-26 eyrbow\BF-frame0_sum1-7_02272026_eyrbow_glucose-2.0_fov1.tif'
+path_in=r'C:\Users\jglic\Downloads\2-27-26 eyrbow\BF-timelapse_sum1-7_02272026_eyrbow_glucose-2.0_fov1.tif'
 # path_in=r'C:\Users\jglic\Downloads\11-7-25 tom70-tdtomato\BF_11072025_ey2795-tom70_glucose-2.0_fov1.tif'
 # path_in=r'C:\Users\jglic\Downloads\2-25-26 3c-hap-selected\BF-timelapse_sum1-4_02252026_3c-hap_fov1.tif'
-path_in=r'C:\Users\jglic\Downloads\SUM_BF-timelapse_03042026_eyrbow_glucose-2.0_fov2.tif'
+# path_in=r'C:\Users\jglic\Downloads\SUM_BF-timelapse_03042026_eyrbow_glucose-2.0_fov2.tif'
 
 #Rescale full size camera image down to confocal sizing if necessary.
 img_2048=io.imread(str(path_in))

@@ -49,7 +49,7 @@ def open_ER(path):
         return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
 def open_mito(path):
     if Path(path).suffix == ".nd2":
-        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=1).astype(int)
+        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=0).astype(int)
     else:
         img = io.imread(str(path))
         img_raw = np.zeros([int(img.shape[0]/2),*img.shape[1:]],dtype=int)
@@ -58,7 +58,7 @@ def open_mito(path):
         return img_raw
 def open_LD(path):
     if Path(path).suffix == ".nd2":
-        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=0).astype(int)
+        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=1).astype(int)
     else:
         img = io.imread(str(path))
         img_raw = np.zeros([int(img.shape[0]/2),*img.shape[1:]],dtype=int)
