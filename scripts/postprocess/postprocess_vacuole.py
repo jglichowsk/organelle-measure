@@ -16,23 +16,23 @@ def postproc_vacuole(path_in: str,path_cell: str,path_out: str, threshold=0.5):
     # img_maxslice=np.argmax(org_prob,axis=0)
     img_org = (orgprob>threshold)
 
-    img_cell = io.imread(str(path_cell))[0,:,:]
-    img_skeleton = skeletonize_zbyz(img_org)
+    # img_cell = io.imread(str(path_cell))[0,:,:]
+    # img_skeleton = skeletonize_zbyz(img_org)
 
-    img_core = find_complete_rings(img_skeleton)
+    # img_core = find_complete_rings(img_skeleton)
     
-    # img_vacuole   = better_vacuole_img(img_core,img_watershed)
-    img_vacuole = np.zeros_like(img_core,dtype=int)
-    for z in range(img_vacuole.shape[0]):
-        sample = img_core[z]
-        candidates = np.unique(sample[img_cell>0])
-        for color in candidates:
-            if len(np.unique(img_cell[sample==color]))==1:
-                img_vacuole[z,sample==color] = color
+    # # img_vacuole   = better_vacuole_img(img_core,img_watershed)
+    # img_vacuole = np.zeros_like(img_core,dtype=int)
+    # for z in range(img_vacuole.shape[0]):
+    #     sample = img_core[z]
+    #     candidates = np.unique(sample[img_cell>0])
+    #     for color in candidates:
+    #         if len(np.unique(img_cell[sample==color]))==1:
+    #             img_vacuole[z,sample==color] = color
 
     io.imsave(
         str(path_out),
-        util.img_as_uint(img_vacuole) 
+        util.img_as_uint(img_org) 
     )
     return None
 
@@ -50,7 +50,7 @@ for path_in in Path(expmt_path+'/ilastik_prob').glob("vo*.tiff"): #UPDATE#######
     path_parts=path_in.stem.split("_")
     path_end="_".join(path_parts[:-1])
     cell_parts=path_in.stem.split('-')
-    cell_end="-".join(cell_parts[:2])[3:]
+    cell_end="-".join(cell_parts[:3])[3:]
 
     path_out=Path(newpath)/f'{path_end}_label.tif'
     path_ref=Path(expmt_path+'/preprocess')/f"{path_end}.tif"

@@ -84,7 +84,7 @@ def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
                     properties=('label','area','bbox_area','bbox')
                 )
                 if len(vo["area"]) == 0: #if the vacuole signal in given z-slice is zero...
-                    continue #go with it?
+                    continue #do nothing?
                 if (maxblob:=max(vo["area"])) > vo_area: #if the max area of previously-measured slices is greater than
                     #the current slice, then...
                     vo_area = maxblob #assign that max value to current area?
@@ -130,7 +130,7 @@ for path_in in Path(expmt_path+'/postprocess').glob('*label.tif'):
     path_parts=path_in.stem.split("_")
     path_end="_".join(path_parts[:-1])
     cell_parts=path_in.stem.split('-')
-    cell_end="-".join(cell_parts[:2])[3:]
+    cell_end="-".join(cell_parts[:3])[3:]
 
     path_cell=Path(expmt_path+'/cell_segment')/f"BF-timelapse_{cell_end}_segm.tif"
     path_out=Path(newpath)/f'{path_end}.csv'

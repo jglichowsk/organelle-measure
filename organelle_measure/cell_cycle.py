@@ -19,25 +19,28 @@ from tools import batch_apply
 ## Find and replace g1_ and s_ with G1_ and S_ respectively after done typing, if still want to. 
 
 #fractional/percent error in organelle volume fraction measurements for ey rbow data
-###TREATING AS 10% ACROSS THE BOARD FOR NOW UNTIL UPDATE FROM SIMON'S PAPER
+#############These error bars are currently meaningless; update ###############
 org_err={
-"er":0.1,
-"px":0.1,
-"vo":0.1,
-"mt":0.1,
-"gl":0.1,
-"ld":0.1
+"er":0.01,
+"px":0.01,
+"vo":0.01,
+"mt":0.01,
+"gl":0.01,
+"ld":0.01
 }
-orgs=['er','px','vo','mt','gl','ld']
+# orgs=['er','px','vo','mt','gl','ld']
+orgs=['ld','gl','vo']
 xbound=30
+# %% 3c-ey2795 pathing
+acdc_paths=os.listdir(expmt_path+'/cell_measure')
 # %% pathing for debugging convenience
-pacdc=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_acdc_output_cpsam-d10-ms8.csv'
-pmyo1=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\eyrbow-yellowconfocal_zstack-avg-proj_myo1_fov2_upscaled.csv'
-pbend=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_manual-annotations.csv'
-palign=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\manual_alignment_key_upscaled.csv'
-pmask=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_cpsam-d10-ms8.tif'
+# pacdc=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_acdc_output_cpsam-d10-ms8.csv'
+# pmyo1=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\eyrbow-yellowconfocal_zstack-avg-proj_myo1_fov2_upscaled.csv'
+# pbend=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_manual-annotations.csv'
+# palign=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\manual_alignment_key_upscaled.csv'
+# pmask=r'C:\Users\jglic\Downloads\11-5-25 myo1-mLemon\Run_2\BF-timelapse_cpsam-d10-ms8.tif'
 
-# %%
+# %% Parse file name metadata
 def parse_meta_organelle(name: str):
     """
     Args: Name is the stem of the ORGANELLE measure csv file.
@@ -55,6 +58,37 @@ def parse_meta_organelle(name: str):
         "time":       time
     } #########don't actually need time???
 
+# %% Linear regression
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+def linreg(dataset: np.ndarray, n: int=1000, train_frac=0.5, plot_graph=False):
+    """
+    Args: Array of data to perform regression upon, number of runs, fraction of data to use for training, optional graph.
+    Outputs: List of regression coeff scores.
+    """
+    scores =[]
+    for run in range(n):
+        train,test=train_test_split(dataset,test_size=0.5)
+        reg=LinearRegression(fit_intercept=False).fit(train[:,0].reshape(-1,1),train[:,1].reshape(-1,1)) #reshaping to revert back to vertical array
+        score=reg.score(test[:,0].reshape(-1,1),test[:,1].reshape(-1,1))
+        scores.append(score)
+    return scores
+
+# fig,axes=plt.subplots(nrows=6,ncols=2,figsize=(15,15))
+# for i in range(len(orgs)):
+#     org=orgs[i]
+#     n0,b0,p0=axes[i,0].hist(sdict[org][0],bins='doane', alpha=0.75, edgecolor='black', color='b', label=org+' G1 cells')
+#     axes[i,0].legend(fontsize='x-large')
+#     n1,b1,p1=axes[i,1].hist(sdict[org][1], bins='doane', alpha=0.75, edgecolor='black', color='y', label=org+' S cells')
+#     axes[i,1].legend(fontsize='x-large')    
+#     # axes[i,0].set_title('G1 '+org+' (n='f"{len(sdict[org][0])})")
+#     # axes[i,0].set_xlabel('Coeff of Determination')
+#     # axes[i,1].set_title('S '+org+' (n='f"{len(sdict[org][1])})")
+#     # axes[i,1].set_xlabel('Coeff of Determination')
+# fig.supxlabel('Coeff of Determination')
+# fig.tight_layout()
+
+# %% Preprocess and sort input data by cc
 def pp_acdc_output(df: pd.DataFrame) -> pd.DataFrame:
     """
     Args: Dataframe containing Cell-ACDC output metrics and analysis information.
@@ -105,25 +139,99 @@ def cc_sort(cell_path: str) -> (pd.DataFrame, pd.DataFrame):
     s_output=pd.concat(s_cells, ignore_index=True)
 
     return g1_output, s_output
+    
+# for path in acdc_paths:
+#     gg,ss=cc_sort(expmt_path+'/cell_measure'+'/'+path)
+#     print(len(np.unique(gg.loc[gg.relationship=='mother','Cell_ID'].values)))
+#     print(len(np.unique(ss.loc[ss.relationship=='mother','Cell_ID'].values)))
 # %% Calc cc phase lengths
+def extract_streaks(plist: list):
+    """
+    Args: List of cc phase annotations for a given cell.
+    Outputs: Three lists together containing complete cc phase lengths, corresponding cc phase, and # of complete cc phases.
+    """
+    ind=1
+    lens=[]
+    phases=[]
+    for i in range(len(plist)): #extract lengths of continuous streaks
+        if 0<i<(len(plist)-1):
+            if plist[i]==plist[i-1]:
+                ind+=1
+            else:
+                lens.append(ind)
+                phases.append(plist[i-1])
+                ind=1
+        if i==(len(plist)-1):
+            lens.append(ind)
+            phases.append(plist[i])
+    if len(lens)<=2:
+        # return 0,phases,0 #####################
+        return [],[],[]
+    else:
+        del lens[0] #drop any streaks contacting the edges 
+        del lens[-1]
+        del phases[0]
+        del phases[-1]
+        return lens, phases, len(lens)
+
 def cc_lengths(cell_path: str):
     """
     Args: Path to cell segm output csv
-    Outputs: Arrays of frame lengths of G1 and S/G2/M phases
+    Outputs: Arrays of frame lengths of G1, S/G2/M phases and lists of complete cc-phase # distribution and composition.
     """
     g1_df,s_df=cc_sort(cell_path)
-    g1_lens, s_lens =[],[]
+    g1_lens, s_lens, lens_dist =[],[],[]
+    ind=0
     for cell_id in np.unique(g1_df.loc[g1_df.relationship=='mother','Cell_ID'].values): #for each G1 mother
+        # ind+=1
         cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id].copy()
-        if cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[-1]<cell_rows['frame_i'].values[-1]: #if G2/M transition happens...
-            s_lens.append(len(cell_rows.loc[cell_rows.cell_cycle_stage=='S'].values))
+        plist=cell_rows['cell_cycle_stage'].values
+        lens,phases,lens_len = extract_streaks(plist)
+        # if len(lens)==0: 
+        #     print('gabbagool')
+        if len(phases)>0:
+            lens_dist.append(lens_len)
+            for i in range(len(lens)):
+                if phases[i]=='G1':
+                    g1_lens.append(lens[i])
+                else:
+                    s_lens.append(lens[i])
+        # if cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[-1]<cell_rows['frame_i'].values[-1]: #if G2/M transition happens
+        #     s_lens.append(len(cell_rows.loc[cell_rows.cell_cycle_stage=='S'].values))
     
     for cell_id in np.unique(s_df.loc[s_df.relationship=='mother','Cell_ID'].values): #for each S mother
+        # ind+=1
         cell_rows=s_df.loc[s_df.Cell_ID==cell_id].copy()
-        if cell_rows.loc[cell_rows.cell_cycle_stage=='G1', 'frame_i'].values[-1]<cell_rows['frame_i'].values[-1]: #if G2/M transition happens...
-            g1_lens.append(len(cell_rows.loc[cell_rows.cell_cycle_stage=='G1'].values))
+        plist=cell_rows['cell_cycle_stage'].values
+        lens,phases,lens_len = extract_streaks(plist)
+        if len(phases)>0:
+            lens_dist.append(lens_len)
+            for i in range(len(lens)):
+                if phases[i]=='G1':
+                    g1_lens.append(lens[i])
+                else:
+                    s_lens.append(lens[i])
+        # if cell_rows.loc[cell_rows.cell_cycle_stage=='G1', 'frame_i'].values[-1]<cell_rows['frame_i'].values[-1]: #if G1/S transition happens
+        #     g1_lens.append(len(cell_rows.loc[cell_rows.cell_cycle_stage=='G1'].values))
+    # print(ind)
+    return g1_lens, s_lens, lens_dist
 
-    return g1_lens, s_lens
+# g_lens,s_lens,lens_l=[],[],[]
+# for path in acdc_paths:
+#     gl,sl,lens_dist=cc_lengths(expmt_path+'/cell_measure'+'/'+path)
+#     g_lens.append(gl)
+#     s_lens.append(sl)
+#     lens_l.append(lens_dist)
+# g_lens=[element for innerList in g_lens for element in innerList]
+# s_lens=[element for innerList in s_lens for element in innerList]
+# lens_l=[element for innerList in lens_l for element in innerList]
+# plt.figure()
+# plt.xlabel('# frames (5 min interval)')
+# plt.title('CC Phase Annotation Lengths')
+# n0,b0,p0=plt.hist(s_lens,bins='doane', alpha=0.75, edgecolor='black', color='b', label='S/G2/M Phase n=('+f'{len(s_lens)})')
+# n1,b1,p1=plt.hist(g_lens, bins=b0, alpha=0.75, edgecolor='black', color='y', label='G1 Phase n=('+f'{len(g_lens)})')
+# n2,b2,p2=plt.hist(lens_l, bins=np.arange(-0.5,5.5,1), alpha=0.75, edgecolor='black', color='r', label='# Complete cc phases n=('+f'{len(lens_l)})')
+# plt.legend()
 # %% find cc transitions
 def find_cc_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
     """
@@ -131,33 +239,72 @@ def find_cc_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
     Outputs: Same dataframes with new index column relative to cc checkpoint progression.
                 Currently dropping g1 but not s buds###############
     """
+    # ind=0
+    # for cell_id in np.unique(g1_df.loc[g1_df.relationship=='bud','Cell_ID'].values):
+    #     ind+=1
+    # print(ind)
     g1_dfs=[]
     for cell_id in np.unique(g1_df.loc[g1_df.relationship=='mother','Cell_ID'].values): #for each G1 mother
         cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id].copy()
-        # if len(cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values>0): #if G1/S transition happens...
-        alignment_frame=cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[0]
-        relative_index=[(cell_rows['frame_i'].values[i]-alignment_frame) for i in range(len(cell_rows))]
-        cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Relative_Index']=relative_index
-        g1_dfs.append(cell_rows)
+        start_frame=cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[0]
+        start_index=[(cell_rows['frame_i'].values[i]-start_frame) for i in range(len(cell_rows))]
+        cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Start_Index']=start_index
+        plist=cell_rows['cell_cycle_stage'].values
+        lens,phases,lens_len = extract_streaks(plist)
+
+        if len(lens)==0: #those cells with ONE annotated cc transition
+            cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Transitions']= 1
+            g1_dfs.append(cell_rows)
+
+        elif len(lens)==1: #those cells with TWO annotated cc transitions
+            div_frame=cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[-1]+1
+            div_index=[(cell_rows['frame_i'].values[i]-div_frame) for i in range(len(cell_rows))]
+            cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Div_Index']=div_index
+            cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Transitions']= 2
+            g1_dfs.append(cell_rows)
+
+        elif len(lens)==2: #those cells with THREE annotated cc transitions
+            # print('deux')
+            continue
+        else: #those cells with >THREE annotated cc transitions
+            # print('trois')
+            continue
     g1_mothers=pd.concat(g1_dfs)
 
     smom_dfs=[]
     sbud_dfs=[] ################### propagate mult cc transitions code
     for cell_id in np.unique(s_df['Cell_ID'].values): #for each S/G2/M cell
         cell_rows=s_df.loc[s_df.Cell_ID==cell_id].copy()
-        # if len(cell_rows.loc[cell_rows.cell_cycle_stage=='G1', 'frame_i'])>0: #if M/G1 transition happens...
         div_frame=cell_rows.loc[cell_rows.cell_cycle_stage=='G1', 'frame_i'].values[0]
         div_index=[(cell_rows['frame_i'].values[i]-div_frame) for i in range(len(cell_rows))]
         cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Div_Index']=div_index
-        if cell_rows.loc[cell_rows.cell_cycle_stage=='S', 'frame_i'].values[-1]>div_frame:
+        plist=cell_rows['cell_cycle_stage'].values
+        lens,phases,lens_len = extract_streaks(plist)
+
+        if len(lens)==0: #those cells with ONE annotated cc transition
+            cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Transitions']= 1
+            if cell_rows['relationship'].values[0]=='mother':
+                smom_dfs.append(cell_rows)
+            else:
+                sbud_dfs.append(cell_rows)
+
+        elif len(lens)==1: #those cells with TWO annotated cc transitions
             start_frame=cell_rows.loc[cell_rows.cell_cycle_stage=='G1', 'frame_i'].values[-1]+1
             start_index=[(cell_rows['frame_i'].values[i]-start_frame) for i in range(len(cell_rows))]
             cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Start_Index']=start_index
+            cell_rows.loc[cell_rows.Cell_ID==cell_id, 'Transitions']= 2
+            if cell_rows['relationship'].values[0]=='mother':
+                smom_dfs.append(cell_rows)
+            else:
+                sbud_dfs.append(cell_rows)
 
-        if cell_rows['relationship'].values[0]=='mother':
-            smom_dfs.append(cell_rows)
-        else:
-            sbud_dfs.append(cell_rows)
+        elif len(lens)==2: #those cells with THREE annotated cc transitions
+            # print('deux')
+            continue
+        else: #those cells with >THREE annotated cc transitions
+            # print('trois')
+            continue
+
     s_mothers=pd.concat(smom_dfs)
     s_buds=pd.concat(sbud_dfs)
 
@@ -215,7 +362,7 @@ def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
     return 
 
 #%% cc organelle analysis
-def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph: bool=False, xbound: int=30, save_fig: bool=False, vol_frac=False) -> (pd.DataFrame,pd.DataFrame):
+def cc_org_analysis(cell_dfpaths: list, pre_org_dfpaths: list, vol_frac=False) -> (pd.DataFrame,pd.DataFrame):
     """
     Args: Lists of paths to csv files containing extracted cell and organelle information respectively.
     Outputs: Two dataframes containing selected cell and organelle metrics, and relative cc transition frames (G1/S 
@@ -225,17 +372,30 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
     for i in range(len(cell_dfpaths)):
         g1_df,s_df=cc_sort(cell_dfpaths[i]) #prelim sort and process
         g1_mothers, s_mothers, s_buds = find_cc_transitions(g1_df, s_df) #find annotated cc transitions
-        fov=cell_dfpaths[i].stem.split("_")[4]
-        fov_org_csvs=[p for p in pre_org_dfpaths if p.stem.split("_")[4][:4]==fov] #parse out org csvs for this fov
+        path_parts=cell_dfpaths[i].stem.split("_")
+        date=path_parts[1]
+        fov=path_parts[4]
+        fov_org_csvs=[p for p in pre_org_dfpaths if p.stem.split("_")[1]==date and p.stem.split("_")[4][:4]==fov] #parse out org csvs for this fov
+
         for cell_id in np.unique(g1_mothers['Cell_ID'].values): #for each cell...
-            pre_start_offset=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Relative_Index'].values[0]
-            post_start_offset=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Relative_Index'].values[-1]+1
+            transitions=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Transitions'].values[0]
+            pre_start_offset=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Start_Index'].values[0]
+            if transitions==1:
+                post_label="post_start_offset"
+                post_offset=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Start_Index'].values[-1]
+            elif transitions==2:
+                post_label="post_div_offset"
+                post_offset=g1_mothers.loc[g1_mothers.Cell_ID==cell_id, 'Div_Index'].values[-1]
+            else:
+                continue
             cell_metrics={
-                "idx_cell": [cell_id],
-                "fov"      : [fov],
-                "relationship": ["mother"],
-                "pre_offset": [pre_start_offset],
-                "post_offset": [post_start_offset],
+                "idx_cell"          : [cell_id],
+                "date"              : [date], 
+                "fov"               : [fov],
+                "relationship"      : ["mother"],
+                "transitions"       : [transitions],
+                "pre_start_offset"  : [pre_start_offset],
+                post_label          : [post_offset]
             }
             result=cell_metrics
 
@@ -272,8 +432,8 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
                 else:
                     vol_difference=None
                 org_metrics={
-                    org_label+"_vol_pre": [pre_org_vol],
-                    org_label+"_vol_post": [post_org_vol]#,
+                    org_label+"_vol_pre"   : [pre_org_vol],
+                    org_label+"_vol_post"  : [post_org_vol]#,
                     # org_label+"_vol_diff": [vol_difference]
                 }
             # result=meta | cell_metrics | org_metrics
@@ -282,13 +442,23 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
 
         for cell_id in np.unique(s_mothers['Cell_ID'].values):
             pre_div_offset=s_mothers.loc[s_mothers.Cell_ID==cell_id, 'Div_Index'].values[0]
-            post_div_offset=s_mothers.loc[s_mothers.Cell_ID==cell_id, 'Div_Index'].values[-1]+1
+            transitions=s_mothers.loc[s_mothers.Cell_ID==cell_id, 'Transitions'].values[0]
+            if transitions==1:
+                post_label="post_div_offset"
+                post_offset=s_mothers.loc[s_mothers.Cell_ID==cell_id, 'Div_Index'].values[-1]
+            elif transitions==2:
+                post_label="post_start_offset"
+                post_offset=s_mothers.loc[s_mothers.Cell_ID==cell_id, 'Start_Index'].values[-1]
+            else:
+                continue
             cell_metrics={
-                "idx_cell": [cell_id],
-                "fov"      : [fov],
-                "relationship": ["mother"],
-                "pre_offset": [pre_div_offset],
-                "post_offset": [post_div_offset],
+                "idx_cell"          : [cell_id],
+                "date"              : [date], 
+                "fov"               : [fov],
+                "relationship"      : ["mother"],
+                "transitions"       : [transitions],
+                "pre_div_offset"    : [pre_div_offset],
+                post_label          : [post_offset]
             }
             result=cell_metrics
 
@@ -325,8 +495,8 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
                 else:
                     vol_difference=None
                 org_metrics={
-                    org_label+"_vol_pre": [pre_org_vol],
-                    org_label+"_vol_post": [post_org_vol]#,
+                    org_label+"_vol_pre"   : [pre_org_vol],
+                    org_label+"_vol_post"  : [post_org_vol]#,
                     # org_label+"_vol_diff": [vol_difference]
                 }
                 result=result | org_metrics
@@ -375,34 +545,47 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
         #     result=meta | metrics
         #     s_dfs.append(pd.DataFrame(result))
 
-    g1_org_df=pd.concat(g1_dfs, ignore_index=True) 
+    g1_org_df=pd.concat(g1_dfs, ignore_index=True)
     s_org_df=pd.concat(s_dfs, ignore_index=True)
-    #Plot desired organelle metric as function of cc position wrt reference cc checkpoint for both groups.
-    if plot_graph==True:
-        # fig,axes=plt.subplots(nrows=1,ncols=2)
-        s_moms=s_org_df.loc[s_org_df.relationship=='mother']
-        s_buds=s_org_df.loc[s_org_df.relationship=='bud']
-        axes[0].errorbar(g1_org_df['pre_offset'].values, g1_org_df[org_label+"_vol_pre"].values, yerr=org_err[org_label]*g1_org_df[org_label+"_vol_pre"].values, ls='none', c='m',marker='o')
-        axes[0].errorbar(g1_org_df['post_offset'].values,g1_org_df[org_label+"_vol_post"].values, yerr=org_err[org_label]*g1_org_df[org_label+"_vol_post"].values,ls='none', c='m',marker='o') #scatter of organelle volume fraction versus relative frame index
-        axes[1].errorbar(s_moms['pre_offset'].values, s_moms[org_label+"_vol_pre"].values, yerr=org_err[org_label]*s_moms[org_label+"_vol_pre"].values,ls='none', c='m',marker='o') 
-        axes[1].errorbar(s_moms['post_offset'].values, s_moms[org_label+"_vol_post"].values, yerr=org_err[org_label]*s_moms[org_label+"_vol_post"].values,ls='none', c='m',marker='o')
-        # axes[1].errorbar(s_buds['pre_offset'].values, s_buds[org_label+"_vol_pre"].values, yerr=org_err[org_label]*s_buds[org_label+"_vol_pre"].values,ls='none', c='r',marker='s') 
-        # axes[1].errorbar(s_buds['post_offset'].values, s_buds[org_label+"_vol_post"].values, yerr=org_err[org_label]*s_buds[org_label+"_vol_post"].values,ls='none', c='r',marker='s')
-
-        axes[0].set_title('G1 mother '+org_label+' vs CC position')
-        axes[0].set_xlabel('Frames relative to Start (5 min interval)')
-        axes[0].set_ylabel(org_label+' volume (voxels)')
-        axes[0].set_xlim(-xbound,xbound)
     
-        axes[1].set_title('S/G2/M '+org_label+' vs CC position')
-        axes[1].set_xlabel('Frames relative to Division (5 min interval)')
-        axes[1].set_ylabel(org_label+' volume (voxels)')
-        axes[1].set_xlim(-xbound,xbound)
-        if vol_frac==True:
-            axes[0].set_ylabel(org_label+' volume fraction')
-            # axes[0].set_ylim(-.1,1.1)
-            # axes[1].set_ylim(-.1,1.1)
-            axes[1].set_ylabel(org_label+' volume fraction')    
+    return g1_org_df, s_org_df
+
+def plot_ccorg(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame, save_fig=False, xbound: int=30,ms=3):
+    """
+    Args: Two dataframes for either G1 or S/G2/M. Bool to save figure, x-axis bound param, set markersize.
+    Outputs: Plots of org metric vs cc positions for either df. Option to save plots.
+    """ 
+    s_moms=s_org_df.loc[s_org_df.relationship=='mother']
+    s_buds=s_org_df.loc[s_org_df.relationship=='bud']
+    #Plot desired organelle metric as function of cc position wrt reference cc checkpoint for both groups.
+    fig,axes=plt.subplots(nrows=len(orgs),ncols=2)
+    for i in range(len(orgs)): #should i keep the four offset columns or distinguish using transitions count in here?
+        org_label=orgs[i]
+        #all the pre's
+        axes[i, 0].errorbar(g1_org_df['pre_start_offset'].values, g1_org_df[org_label+"_vol_pre"].values, yerr=org_err[org_label]*g1_org_df[org_label+"_vol_pre"].values, ls='none', c='m',marker='o',ms=ms)
+        axes[i, 1].errorbar(s_moms['pre_div_offset'].values, s_moms[org_label+"_vol_pre"].values, yerr=org_err[org_label]*s_moms[org_label+"_vol_pre"].values,ls='none', c='m',marker='o',ms=ms) 
+        #then then the 1-transitions
+        axes[i, 0].errorbar(g1_org_df.loc[g1_org_df.transitions==1,'post_start_offset'].values,g1_org_df.loc[g1_org_df.transitions==1,org_label+"_vol_post"].values, yerr=org_err[org_label]*g1_org_df.loc[g1_org_df.transitions==1,org_label+"_vol_post"].values,ls='none', c='m',marker='o',ms=ms)
+        axes[i, 1].errorbar(s_moms.loc[s_moms.transitions==1,'post_div_offset'].values, s_moms.loc[s_moms.transitions==1,org_label+"_vol_post"].values, yerr=org_err[org_label]*s_moms.loc[s_moms.transitions==1,org_label+"_vol_post"].values,ls='none', c='m',marker='o',ms=ms)
+        #then the 2-transitions
+        axes[i, 1].errorbar(g1_org_df.loc[g1_org_df.transitions==2,'post_div_offset'].values,g1_org_df.loc[g1_org_df.transitions==2,org_label+"_vol_post"].values, yerr=org_err[org_label]*g1_org_df.loc[g1_org_df.transitions==2,org_label+"_vol_post"].values,ls='none', c='m',marker='o',ms=ms)
+        axes[i, 0].errorbar(s_moms.loc[s_moms.transitions==2,'post_start_offset'].values, s_moms.loc[s_moms.transitions==2,org_label+"_vol_post"].values, yerr=org_err[org_label]*s_moms.loc[s_moms.transitions==2,org_label+"_vol_post"].values,ls='none', c='m',marker='o',ms=ms)
+       
+        # axes[i, 1].errorbar(s_buds['pre_offset'].values, s_buds[org_label+"_vol_pre"].values, yerr=org_err[org_label]*s_buds[org_label+"_vol_pre"].values,ls='none', c='r',marker='s') 
+        # axes[i, 1].errorbar(s_buds['post_offset'].values, s_buds[org_label+"_vol_post"].values, yerr=org_err[org_label]*s_buds[org_label+"_vol_post"].values,ls='none', c='r',marker='s')
+
+        axes[i, 0].set_title('G1 mother '+org_label+' vs CC position')
+        axes[i, 0].set_xlabel('Frames relative to Start (5 min interval)')
+        # axes[i, 0].set_ylabel(org_label+' volume (voxels)')
+        axes[i, 0].set_ylabel(org_label+' volume fraction')
+        axes[i, 0].set_xlim(-xbound,xbound)
+
+        axes[i, 1].set_title('S/G2/M '+org_label+' vs CC position')
+        axes[i, 1].set_xlabel('Frames relative to Division (5 min interval)')
+        # axes[i, 1].set_ylabel(org_label+' volume (voxels)')
+        axes[i, 1].set_ylabel(org_label+' volume fraction')    
+        axes[i, 1].set_xlim(-xbound,xbound)
+
         fig.tight_layout()
 
     if save_fig==True:
@@ -410,88 +593,102 @@ def cc_org_analysis(cell_dfpaths: np.ndarray, pre_org_dfpaths: list, plot_graph:
             plt.savefig(Path(expmt_path+'/cc_measure')/f"{org_label}_cc-analysis_normalized.png")
         else:
             plt.savefig(Path(expmt_path+'/cc_measure')/f"{org_label}_cc-analysis.png")
-
-    return g1_org_df, s_org_df
+    return None
 
 # %% Bin organelle measurements by cc postion
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-def binned_org(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame,plot_graph: bool=False):
+def binned_org(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame,plot_graph: bool=True):
     """
     Args: Dataframes of extracted cell and organelle metrics for each cc group. Option to plot.
     Outputs: Graphs displaying org vs cc trends, binned along the cc position axis.
     """
-    # g1_df,s_df=cc_org_analysis(cell_path,pre_org_path,plot_graph=False,save_fig=False,vol_frac=True)
-    # g1_df=pd.concat(g1_ls, ignore_index=True)
-    # s_df=pd.concat(s_ls, ignore_index=True)
-    # orgs=np.unique(g1_org_df['organelle'].values)
+    all_cells=pd.concat([g1_org_df,s_org_df], ignore_index=True)
     if plot_graph==True:
         plt_ind=0
-        fig,axes=plt.subplots(nrows=len(orgs),ncols=2,figsize=(5,15),sharex=True)
+        fig,axes=plt.subplots(nrows=len(orgs),ncols=2,sharex=True)
 
     scores={}
     for org in orgs:
-        # g1_df=g1_org_df.loc[g1_org_df.organelle==org]
-        # s_df=s_org_df.loc[s_org_df.organelle==org]
-        g1_out=[]
-        for time in np.unique(g1_org_df['pre_offset'].values):
-            bin_vals=g1_org_df.loc[g1_org_df.pre_offset==time,org+"_vol_pre"].values
+        start_out=[]
+        for time in np.unique(all_cells['pre_start_offset'].values):
+            bin_vals=all_cells.loc[all_cells.pre_start_offset==time,org+"_vol_pre"].values
             bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
             if len(bin_vals)>0:
                 bin_avg=np.mean(bin_vals)
                 bin_std=np.std(bin_vals)
-                g1_out.append([time,bin_avg,bin_std])
-        for time in np.unique(g1_org_df['post_offset'].values):
-            bin_vals=g1_org_df.loc[g1_org_df.post_offset==time,org+"_vol_post"].values
+                start_out.append([time,bin_avg,bin_std])
+        for time in np.unique(all_cells['post_start_offset'].values):
+            bin_vals=all_cells.loc[all_cells.post_start_offset==time,org+"_vol_post"].values
             bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
             if len(bin_vals)>0:
                 bin_avg=np.mean(bin_vals)
                 bin_std=np.std(bin_vals)
-                g1_out.append([time,bin_avg,bin_std])
+                start_out.append([time,bin_avg,bin_std])
 
-        s_out=[]
-        for time in np.unique(s_org_df['pre_offset'].values):
-            bin_vals=s_org_df.loc[s_org_df.pre_offset==time,org+"_vol_pre"].values
+        div_out=[]
+        for time in np.unique(all_cells['pre_div_offset'].values):
+            bin_vals=all_cells.loc[all_cells.pre_start_offset==time,org+"_vol_pre"].values
             bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
             if len(bin_vals)>0:
                 bin_avg=np.mean(bin_vals)
                 bin_std=np.std(bin_vals)
-                s_out.append([time,bin_avg,bin_std])
-        for time in np.unique(s_org_df['post_offset'].values):
-            bin_vals=s_org_df.loc[s_org_df.post_offset==time,org+"_vol_post"].values
+                div_out.append([time,bin_avg,bin_std])
+        for time in np.unique(all_cells['post_div_offset'].values):
+            bin_vals=all_cells.loc[all_cells.post_start_offset==time,org+"_vol_post"].values
             bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
             if len(bin_vals)>0:
                 bin_avg=np.mean(bin_vals)
                 bin_std=np.std(bin_vals)
-                s_out.append([time,bin_avg,bin_std])
+                div_out.append([time,bin_avg,bin_std])
 
-        g1_out,s_out=np.array(g1_out),np.array(s_out)
+        # g1_out=[]
+        # for time in np.unique(g1_org_df['pre_offset'].values):
+        #     bin_vals=g1_org_df.loc[g1_org_df.pre_offset==time,org+"_vol_pre"].values
+        #     bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
+        #     if len(bin_vals)>0:
+        #         bin_avg=np.mean(bin_vals)
+        #         bin_std=np.std(bin_vals)
+        #         g1_out.append([time,bin_avg,bin_std])
+        # for time in np.unique(g1_org_df['post_offset'].values):
+        #     bin_vals=g1_org_df.loc[g1_org_df.post_offset==time,org+"_vol_post"].values
+        #     bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
+        #     if len(bin_vals)>0:
+        #         bin_avg=np.mean(bin_vals)
+        #         bin_std=np.std(bin_vals)
+        #         g1_out.append([time,bin_avg,bin_std])
+
+        # s_out=[]
+        # for time in np.unique(s_org_df['pre_offset'].values):
+        #     bin_vals=s_org_df.loc[s_org_df.pre_offset==time,org+"_vol_pre"].values
+        #     bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
+        #     if len(bin_vals)>0:
+        #         bin_avg=np.mean(bin_vals)
+        #         bin_std=np.std(bin_vals)
+        #         s_out.append([time,bin_avg,bin_std])
+        # for time in np.unique(s_org_df['post_offset'].values):
+        #     bin_vals=s_org_df.loc[s_org_df.post_offset==time,org+"_vol_post"].values
+        #     bin_vals=[entry for entry in bin_vals if ~np.isnan(entry)]
+        #     if len(bin_vals)>0:
+        #         bin_avg=np.mean(bin_vals)
+        #         bin_std=np.std(bin_vals)
+        #         s_out.append([time,bin_avg,bin_std])
+
+        
+        start_out,div_out=np.array(start_out),np.array(div_out)
+        # g1_out,s_out=np.array(g1_out),np.array(s_out)
 
         #regression analysis here ###############
-        ##order of args always training and then testing data
-        # g1_train_ind=np.arange(0,len(g1_out[:,0]))
-        # g1_subset=g1_out[np.random.choice(g1_train_ind,size=int(len(g1_train_ind)/2))]
-        # g1_target=g1_out[]
-
-        #train model on subset then evaluate score on the rest of data
-        g1_train,g1_test=train_test_split(g1_out[:,0:2],test_size=0.5)
-        g1_reg=LinearRegression(fit_intercept=False).fit(g1_train[:,0].reshape(-1,1),g1_train[:,1].reshape(-1,1)) #reshaping to revert back to vertical array
-        g1_score=g1_reg.score(g1_test[:,0].reshape(-1,1),g1_test[:,1].reshape(-1,1))
-
-        # s_train_ind=np.arange(0,len(s_out[:,0]))
-        # s_subset=s_out[np.random.choice(s_train_ind,size=int(len(s_train_ind)/2))]
-        s_train,s_test=train_test_split(s_out[:,0:2],test_size=0.5)
-        s_reg=LinearRegression(fit_intercept=False).fit(s_train[:,0].reshape(-1,1),s_train[:,1].reshape(-1,1))
-        s_score=s_reg.score(s_test[:,0].reshape(-1,1),s_test[:,1].reshape(-1,1))
-
-        score={
-            org:[g1_score,s_score]
-        }
-        scores=scores|score
+        # g1_scores=linreg(g1_out[:,0:2])
+        # s_scores=linreg(s_out[:,0:2])
+        # score={
+        #     org:[g1_scores,s_scores]
+        # }
+        # scores=scores|score
 
         if plot_graph==True:
-            axes[plt_ind,0].errorbar(g1_out[:,0],g1_out[:,1],yerr=g1_out[:,2],ls='none', c='m',marker='o')
-            axes[plt_ind,1].errorbar(s_out[:,0],s_out[:,1],yerr=s_out[:,2],ls='none', c='m',marker='o')
+            axes[plt_ind,0].errorbar(start_out[:,0],start_out[:,1],yerr=start_out[:,2],ls='none', c='m',marker='o')
+            axes[plt_ind,1].errorbar(div_out[:,0],div_out[:,1],yerr=div_out[:,2],ls='none', c='m',marker='o')
+            # axes[plt_ind,0].errorbar(g1_out[:,0],g1_out[:,1],yerr=g1_out[:,2],ls='none', c='m',marker='o')
+            # axes[plt_ind,1].errorbar(s_out[:,0],s_out[:,1],yerr=s_out[:,2],ls='none', c='m',marker='o')
             
             axes[plt_ind,0].set_title('G1 mother '+org+' vs CC position')
             # axes[plt_ind,0].set_xlabel('Frames relative to Start (5 min interval)')
@@ -511,9 +708,9 @@ def binned_org(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame,plot_graph: bool=
         fig.supxlabel('Frames relative to Annotated Bud Emergence/Division (5 min interval')
         fig.supylabel('Binned organelle volume')
         fig.tight_layout()
-    return scores
+    # return scores
     # return g1_out,s_out
-
+    return start_out,div_out
 # %% Myo1 dynamics analysis
 def ticks(img_df: pd.DataFrame, thresh: float=0.5):
     """
@@ -709,14 +906,7 @@ def find_ccdiffs(cell_path: str, myo1roi_path: str, bend_path: str):
     # n1,b1,p1=plt.hist(mb, bins=b0, alpha=0.75, edgecolor='black', color='y', label='Bends (n='+f'{len(mb)})')
     # plt.legend()
 #     return
-# %% Extract trendlines
-# def extract_trend():
-#     """
-#     Args:
-#     Outputs:
-#     """
 
-#     return trend_array 
 # %%
 list_cell = [] #Initialize lists for cell and org csvs
 list_in   = [] 
@@ -728,10 +918,15 @@ if not os.path.exists(newpath:=Path(expmt_path+'/cc_measure')):
 for path_in in Path(expmt_path+'/org_measure').glob('*pre.csv'):
     path_parts=path_in.stem.split("_")
     fov=path_parts[4][:4] ########HARD-CODED BELOW = BAD
-    path_cell=Path(expmt_path+'/cell_measure')/f"BF-timelapse_03042026_eyrbow_glucose-2.0_{fov}_acdc_output_cpsam_d10.csv"
+    # path_cell=Path(expmt_path+'/cell_measure')/f"BF-timelapse_03042026_eyrbow_glucose-2.0_{fov}_acdc_output_cpsam_d10.csv"
+
+    # path_end="_".join(path_parts[:-1])
+    cell_parts=path_in.stem.split('-')
+    cell_end="-".join(cell_parts[:3])[3:]
+    path_acdc=Path(expmt_path+'/cell_measure')/f"BF-timelapse_{cell_end}_acdc_output_cpsam-d25.csv"
 
     list_in.append(path_in)
-    list_cell.append(path_cell)
+    list_cell.append(path_acdc)
 # list_in=np.unique(list_in)
 # list_cell=np.unique(list_cell)
 

@@ -36,18 +36,18 @@ def load_nd2_plane(path:str,frame:str='cyx',axes:str='tz',idx:int=0):
 # END of ND2reader wrapper.
 
 #%%%
-# START of organelle nd2 file opener
-def open_golgi(path):
+# START of organelle nd2 file opener --- all fucked up due to changing capture settings and stuff so have to check, and should generalize in future.
+def open_golgi(path: str):
+    if 'c' in get_nd2_size(path):
+        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
+    else:
+        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=1).astype(int)
+def open_ER(path: str):
     if 'c' in get_nd2_size(path):
         return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
     else:
         return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
-def open_ER(path):
-    if 'c' in get_nd2_size(path):
-        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
-    else:
-        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
-def open_mito(path):
+def open_mito(path: str):
     if Path(path).suffix == ".nd2":
         return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=0).astype(int)
     else:
@@ -56,18 +56,29 @@ def open_mito(path):
         for z in range(img_raw.shape[0]):
             img_raw[z] = img[2*z]
         return img_raw
-def open_LD(path):
+def open_LD(path: str):
     if Path(path).suffix == ".nd2":
-        return load_nd2_plane(str(path),frame="zyx",axes='tc',idx=1).astype(int)
+        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
     else:
         img = io.imread(str(path))
         img_raw = np.zeros([int(img.shape[0]/2),*img.shape[1:]],dtype=int)
         for z in range(img_raw.shape[0]):
             img_raw[z] = img[2*z+1]
         return img_raw
+def open_px(path: str):
+    if 'c' in get_nd2_size(path):
+        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
+    else:
+        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=1).astype(int)
+def open_vo(path: str):
+    if 'c' in get_nd2_size(path):
+        return np.sum(load_nd2_plane(str(path),frame="czyx",axes='t',idx=0).astype(int),axis=0,dtype=int)
+    else:
+        return load_nd2_plane(str(path),frame="zyx",axes='t',idx=0).astype(int)
+
 open_organelles = {
-    "px": lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=0).astype(int),
-    "vo": lambda x: load_nd2_plane(str(x),frame="zyx",axes='tc',idx=1).astype(int),
+    "px": open_px,
+    "vo": open_vo,
     "er": open_ER,
     "gl": open_golgi,
     "mt": open_mito,
@@ -211,3 +222,5 @@ def batch_apply(func,args):
     args["RESULT"] = pd.Series(results)
     args["ERR_MESSAGES"] = pd.Series(errmsgs)
     return None
+
+# %%
