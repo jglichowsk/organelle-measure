@@ -9,7 +9,7 @@ sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-m
 from pathing_variables import expmt_path
 from tools import batch_apply
 
-def postproc_globular(path_in: str,path_ref: str,path_out: str, threshold=0.5):
+def postproc_globular(path_in: str,path_ref: str,path_out: str, threshold=0.6):
     bkgdprob=io.imread(str(path_in))
     img_ref = io.imread(str(path_ref))
     orgprob=1-bkgdprob
@@ -26,7 +26,8 @@ list_in=[]
 list_ref=[]
 list_out=[]
 
-organelles = ["px","ld","gl"]
+# organelles = ["px","ld","gl"]
+organelles=["ld"]
 
 if not os.path.exists(newpath:=Path(expmt_path+'/postprocess')):
     print('Creating folder ',str(expmt_path+'/postprocess'))

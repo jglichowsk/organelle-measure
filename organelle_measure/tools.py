@@ -118,6 +118,7 @@ def skeletonize_zbyz(binary3d):
     for z in range(len(skeletonized)):
         skeletonized[z] = morphology.skeletonize(binary3d[z])
     return skeletonized
+    
 def watershed_zbyz(skeleton3d):
     reversed3d = ~skeleton3d
     img_dist = np.zeros_like(reversed3d,dtype=float)
@@ -126,12 +127,14 @@ def watershed_zbyz(skeleton3d):
         img_dist[z] = ndi.distance_transform_edt(reversed3d[z])
         img_wtsd[z] = segmentation.watershed(-img_dist[z],mask=reversed3d[z],)
     return img_wtsd
+
 def find_complete_rings(skeleton3d):
     core3d = np.zeros_like(skeleton3d,dtype=int)
     for z in range(core3d.shape[0]):
-        skeleton3d[z] = segmentation.clear_border(skeleton3d[z])
-        core3d[z] = measure.label(morphology.flood_fill(~skeleton3d[z],(0,0),False,footprint=morphology.disk(1)))
+        skeleton3d[z] = segmentation.clear_border(skeleton3d[z]) #clears objects touching the border.
+        core3d[z] = measure.label(morphology.flood_fill(~skeleton3d[z],seed_point=(0,0),new_value=False,footprint=morphology.disk(1)))
     return core3d
+
 def intersection_over_union(bool1,bool2):
     return np.count_nonzero(bool1*bool2)/np.count_nonzero(bool1+bool2)
 def find_hidden_object(expand2d,watershed2d,coord):
@@ -209,6 +212,7 @@ def neighbor_mean(img_orga,img_cell):
     return img_out
 
 def batch_apply(func,args):
+    print('********Running batch apply**********')
     results = []
     errmsgs  = []
     for entry in args.iterrows():

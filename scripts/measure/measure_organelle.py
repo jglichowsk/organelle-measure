@@ -9,16 +9,7 @@ sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-m
 from pathing_variables import expmt_path
 from tools import batch_apply
 
-#List of organelle abbreviations that are used in file naming convention.
-organelles = [
-    "px",
-    "er",
-    "gl",
-    "mt",
-    "ld",
-    "vo"
-]
-
+# %%
 def parse_meta_organelle(name: str):
     """
     Args: Name is the stem of the ORGANELLE label image file.
@@ -77,17 +68,13 @@ def measure1organelle(path_org: str,path_cell: str,path_out: str,metadata=None):
             vo_area = 0 #initialize the following metrics at 0
             vo_bbox_area = 0
             bbox0,bbox1,bbox2,bbox3,bbox4,bbox5 = 0,0,0,0,0,0
-            for z in range(img_orga_crop.shape[0]): #for each z-slice in organelle image stack...
-                #read out the following properties to table.
-                vo = measure.regionprops_table(
-                    img_orga_crop[z],
-                    properties=('label','area','bbox_area','bbox')
-                )
+            for z in range(img_orga_crop.shape[0]): #for each z-slice in cell image stack...
+                vo = measure.regionprops_table(img_orga_crop[z], properties=('label','area','bbox_area','bbox'))
+
                 if len(vo["area"]) == 0: #if the vacuole signal in given z-slice is zero...
                     continue #do nothing?
-                if (maxblob:=max(vo["area"])) > vo_area: #if the max area of previously-measured slices is greater than
-                    #the current slice, then...
-                    vo_area = maxblob #assign that max value to current area?
+                if (maxblob:=max(vo["area"])) > vo_area: #run through to find max vo area
+                    vo_area = maxblob #update variable
                     idxblob = np.argmax(vo["area"]) #record index (z-slice) of max vacuole area.
                     vo_bbox_area = vo["bbox_area"][idxblob] #extract bbox area for that slice. 
                     bbox0,bbox3 = z,z #rewriting some bbox params according to where max area slice is located?
@@ -126,18 +113,21 @@ if not os.path.exists(newpath:=Path(expmt_path+'/org_measure')):
     print('Creating folder ',str(expmt_path+'/org_measure'))
     os.makedirs(newpath)
 
-for path_in in Path(expmt_path+'/postprocess').glob('*label.tif'):
-    path_parts=path_in.stem.split("_")
-    path_end="_".join(path_parts[:-1])
-    cell_parts=path_in.stem.split('-')
-    cell_end="-".join(cell_parts[:3])[3:]
+# organelles = ["px","er","gl","mt","ld","vo"]
+organelles=['ld']
+for organelle in organelles:
+    for path_in in Path(expmt_path+'/postprocess').glob(f"{organelle}*label.tif"):
+        path_parts=path_in.stem.split("_")
+        path_end="_".join(path_parts[:-1])
+        cell_parts=path_in.stem.split('-')
+        cell_end="-".join(cell_parts[:3])[3:]
 
-    path_cell=Path(expmt_path+'/cell_segment')/f"BF-timelapse_{cell_end}_segm.tif"
-    path_out=Path(newpath)/f'{path_end}.csv'
+        path_cell=Path(expmt_path+'/cell_segment')/f"BF-timelapse_{cell_end}_segm.tif"
+        path_out=Path(newpath)/f'{path_end}.csv'
 
-    list_in.append(path_in)
-    list_cell.append(path_cell)
-    list_out.append(path_out)
+        list_in.append(path_in)
+        list_cell.append(path_cell)
+        list_out.append(path_out)
 
 args = pd.DataFrame({
     "path_in":   list_in,

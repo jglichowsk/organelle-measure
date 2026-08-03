@@ -1,6 +1,6 @@
 # This script aims at finding the error that starts from the measured value
 # In previous scripts, the mean of the error samples are different from the 
-# meansured value, bad-looking.
+# measured value, bad-looking.
 # %%
 import numpy as np
 import pandas as pd
