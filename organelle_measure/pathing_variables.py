@@ -4,8 +4,8 @@
 #     3. Create folders when needed.
 #     4. Parse experiment details for Excel labelling. 
 
-# expmt_path=r'C:\Users\jglic\Downloads\3c-ey2795'
-expmt_path=r'D:\3c-ey2795'
+expmt_path=r'C:\Users\jglic\Downloads\08132026 3c-ey2795'
+# expmt_path=r'D:\3c-ey2795'
 # scope_tags=['confred-jg', 'confynb-jg']
 # green_tag='eyrbow-green'
 #3c-ey2795 strain

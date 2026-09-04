@@ -75,6 +75,10 @@
     - ...
 
 ## Pipeline
+1. Cell Segmentation:
+    -Raw bright-field time series are segmented using cellpose.v4 in Cell-ACDC, with cell tracking done by Cell-ACDC (v2). Segmentation correction and cell-cycle annotations are subsequently done in Cell-ACDC as well. The resulting mask is where all geometric cell estimates are extracted from.
+    -Then, this cell mask is downscaled, rotated, and affine transformed (using Interactive Affine) in ImageJ. The interpolation pixels (all non-integer values) are set to zero, and the remaining cell labels are expanded two times by skimage.segmentation.expand_labels() with the distance parameter set to 1. The two expansions of d=1 as opposed to one expansion of d=2 is to better divvy up the bud neck area between mother and daughter cells. The resulting afftransf-expand mask from this process is used to assign organelle signal to its corresponding cell in measure_organelle. 
+
 
 > **General rule:** <br> run `python ./scripts/{xxx}.py` after modifying `args` in each script. 
 It should be a `pandas.DataFrame`, whose columns are the keyword arguments to the batch-applied function, while each row is an input.
