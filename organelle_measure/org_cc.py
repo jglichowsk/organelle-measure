@@ -29,23 +29,21 @@ org_err={
 # orgs=['er','px','vo','mt','gl','ld']
 orgs=['ld','gl', 'vo']
 cam_pxl_size=.108 #in microns
+zstepsize=.200 #in microns
 xbound=30
 
-# %% 3c-ey2795 pathing
+# %% pathing
 # acdc_paths=os.listdir(expmt_path+'/cell_measure')
 
-#pathing fnc
-#cpath is only path in cell_measure, 
+# julcpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\cell_measure\BF-timelapse_acdc_output_07172026_cpsam-d25-ms20.csv'
+# julmaskpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\BF-timelapse_07172026_myo1-mlemon_glucose-2.0_fov1_segm-afftransf-expand.tif'
+# julmyo1path=r'C:\Users\jglic\Downloads\07172026 myo1 high res\confyellow-jg_07172026_myo1-mlemon_glucose-2.0_fov1_despeckle_r=4.csv'
+# julaapath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\autoassigntable_r=4_norm.csv'
 
-# cpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\BF-timelapse_acdc_output_07172026_cpsam-d25-ms20.csv'
-# maskpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\BF-timelapse_07172026_myo1-mlemon_glucose-2.0_fov1_segm-afftransf-expand.tif'
-# myo1path=r'C:\Users\jglic\Downloads\07172026 myo1 high res\confyellow-jg_07172026_myo1-mlemon_glucose-2.0_fov1_despeckle_r=4.csv'
-# aapath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\autoassigntable_r=4.csv'
-
-# cpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_acdc_output_cpsam-d25.csv'
-# maskpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_cpsam-d25_afftransf-TEST2.tif'
-# myo1path=r'C:\Users\jglic\Downloads\06102026 myo1 high res\smooth_SUM-confyellow-jg_06102026_ey2795-myo1_glucose-2.0_fov1_r=4.csv'
-# aapath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\autoassigntable_r=4.csv'
+# juncpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_acdc_output_cpsam-d25.csv'
+# junmaskpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_cpsam-d25_afftransf-TEST2.tif'
+# junmyo1path=r'C:\Users\jglic\Downloads\06102026 myo1 high res\SUM-confyellow-jg_06102026_ey2795-myo1_glucose-2.0_fov1_despeckle_r=4.csv'
+# junaapath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\autoassigntable_r=4_norm.csv'
 
 # cpath=r'C:\Users\jglic\Downloads\11052025 myo1\BF-timelapse_acdc_output_cpsam-d10-ms8.csv'
 # maskpath=r'C:\Users\jglic\Downloads\11052025 myo1\BF-timelapse_cpsam-d10-ms8_afftransf_no-border.tif'
@@ -59,7 +57,11 @@ def parse_meta_organelle(name: str):
     Outptuts: Dictionary containing experiment metadata
     """
     #Unpack experiment metadata according to file naming convention.
-    deconv, stk, time, organelle, date, strain, condition, field=name.split('_')
+    tags=name.split('_')
+    if tags[0]=='deconv':
+        deconv, stk, time, organelle, date, strain, condition, field, probtag=name.split('_')
+    else:
+        stk, time, organelle, date, strain, condition, field, probtag=name.split('_')
     # field,time=field_time.split('-')
     return {
         "organelle":  organelle,
@@ -85,7 +87,7 @@ def parse_meta_orgmeasure(name: str):
         "condition":  condition,
         "field":      field,
     }
-# %%
+# %% Generate input file path lists
 list_cell = [] #Initialize lists for cell and org csvs
 list_in   = [] 
 
@@ -99,7 +101,7 @@ for path_in in Path(expmt_path+'/org_measure').glob('*.csv'):
     cell_parts=path_in.stem.split('-')
     cell_end="-".join(cell_parts[:3])[3:]
     path_acdc=Path(expmt_path+'/cell_measure')/f"BF-timelapse_{cell_end}_cpsam-d25-ms75.csv"
-    # path_acdc=Path(expmt_path+'/cell_measure')/f"BF-timelapse_acdc_output_cpsam-d25-ms75.csv"
+    # print(path_acdc)
 
     list_in.append(path_in)
     list_cell.append(path_acdc)
@@ -108,7 +110,11 @@ for path_in in Path(expmt_path+'/org_measure').glob('*.csv'):
 #     "path_in":   list_in,
 #     "path_cell": list_cell
 # })
-# %% Normalization function
+# %% misc functions
+#ceiling division
+def ceildiv(a, b):
+    return -(a // -b)
+# Normalization function
 def norm(arr: np.ndarray):
     return arr/np.max(arr)
 # %% Linear regression
@@ -198,7 +204,7 @@ def pp_acdc_output(acdc_path: str, remove_dead: bool=True, remove_excl: bool=Tru
         if excl_indices.empty==True:
             df=df.drop(excl_indices)
 
-    initial_size_thresh=150 #pixels
+    initial_size_thresh=150 #pixels     #### I guess better way to do this is to ignore that Start but still utilize future information. 
     if bud_thresh==True:
         for cell_id in np.unique(df['Cell_ID'].values):
             if df.loc[df.Cell_ID==cell_id, 'frame_i'].values[0]>0 and df.loc[df.Cell_ID==cell_id, 'relationship'].values[0]=='bud' and df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[0]>initial_size_thresh:
@@ -211,13 +217,10 @@ def pp_acdc_output(acdc_path: str, remove_dead: bool=True, remove_excl: bool=Tru
             norm_area=[(cell_rows['cell_area_pxl'].values[i]/np.max(cell_rows['cell_area_pxl'].values)) for i in range(len(cell_rows))]
             df.loc[df.Cell_ID==cell_id, 'cell_area_norm']=norm_area 
         if approx_vol_col==True:
-            vol_estimate=[(df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[i]*df.loc[df.Cell_ID==cell_id, 'minor_axis_length'].values[i])*(cam_pxl_size**3) for i in range(len(cell_rows))]
+            vol_estimate=[(df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[i]*df.loc[df.Cell_ID==cell_id, 'minor_axis_length'].values[i])*(cam_pxl_size**2)*(zstepsize) for i in range(len(cell_rows))]
             df.loc[df.Cell_ID==cell_id, 'approx_vol']=vol_estimate 
             vol_estimate_norm=vol_estimate/np.max(vol_estimate)
             df.loc[df.Cell_ID==cell_id, 'approx_vol_norm']=vol_estimate_norm
-        # if add_transitions==True:
-        #     num_transitions=find_num_transitions(cell_rows)
-        #     df.loc[df.Cell_ID==cell_id, 'Transitions']= [num_transitions for i in range(len(cell_rows))]
 
     # output_name=Path(acdc_path).stem + '_pp.csv'
     # output_path=Path(acdc_path).parent/f"{output_name}"
@@ -255,9 +258,9 @@ def cc_sort(acdc_path: str) -> (pd.DataFrame, pd.DataFrame):
                 cell_rows['cc_group']='gbud'
                 g1_cells.append(cell_rows)
             else:
-                continue
+                print(f"Error: Cell state not recognized for bud {cell_id}")
         else:
-            print('Error: Cell state not recognized for cell ' + str(cell_id))
+            print(f"Error: Cell state not recognized for cell {cell_id}")
 
     g1_output=pd.concat(g1_cells, ignore_index=True)
     s_output=pd.concat(s_cells, ignore_index=True)
@@ -270,20 +273,21 @@ def cc_sort(acdc_path: str) -> (pd.DataFrame, pd.DataFrame):
 #     print(len(np.unique(ss.loc[ss.relationship=='mother','Cell_ID'].values)))
 
 # %% cc phase lengths for entire fov
-def cc_lengths(cell_path: str):
+def cc_lengths(cell_path: str, camsamprate: int=5):
     """
     Args: Path to cell segm output csv
     Outputs: Arrays of frame lengths of G1, S/G2/M phases and lists of complete cc-phase # distribution and composition.
     """
     g1_df,s_df=cc_sort(cell_path)
+    cdf=pd.concat([g1_df, s_df])
     g1_lens, s_lens, cc_lens =[],[],[]
     ind=0
-    for cell_id in np.unique(g1_df.loc[g1_df.relationship=='mother','Cell_ID'].values): #for each G1 mother
-        cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id].copy()
+    for cell_id in np.unique(cdf.loc[cdf.relationship=='mother','Cell_ID'].values): #for each G1 mother
+        cell_rows=cdf.loc[cdf.Cell_ID==cell_id].copy()
         plist=cell_rows['cell_cycle_stage'].values
         lens,phases,num_phases = extract_streaks(plist)
 
-        if len(lens)>2:
+        if len(lens)>2: #lengths of individual phases
             del lens[0] #drop any streaks contacting the edges 
             del lens[-1]
             del phases[0]
@@ -293,51 +297,18 @@ def cc_lengths(cell_path: str):
                     g1_lens.append(lens[i])
                 else:
                     s_lens.append(lens[i])
-        if len(lens)>1:
-            for j in range(len(lens)):
-                if len(lens)>(j+1): #now record lengths of full cell cycles
-                    cc_lens.append(lens[j]+lens[j+1])
-    
-    for cell_id in np.unique(s_df.loc[s_df.relationship=='mother','Cell_ID'].values): #for each S mother
-        cell_rows=s_df.loc[s_df.Cell_ID==cell_id].copy()
-        plist=cell_rows['cell_cycle_stage'].values
-        lens,phases,num_phases = extract_streaks(plist)
-        if len(lens)>2:
-            del lens[0] #drop any streaks contacting the edges 
-            del lens[-1]
-            del phases[0]
-            del phases[-1]
-            for i in range(len(lens)):
-                if phases[i]=='G1':
-                    g1_lens.append(lens[i])
-                else:
-                    s_lens.append(lens[i])
-        if len(lens)>1:
-            for j in range(len(lens)):
-                if len(lens)>(j+1): #now record lengths of full cell cycles
-                    cc_lens.append(lens[j]+lens[j+1])
 
-    return g1_lens, s_lens, cc_lens
+        if 2<=len(lens)<=3: #now record lengths of full cell cycles
+            cc_lens.append(lens[0]+lens[1])
+        if 4<=len(lens)<=5:
+            cc_lens.append(lens[0]+lens[1])
+            cc_lens.append(lens[2]+lens[3])
+        if 6<=len(lens)<=7:
+            cc_lens.append(lens[0]+lens[1])
+            cc_lens.append(lens[2]+lens[3])
+            cc_lens.append(lens[4]+lens[5])
 
-# g_lens,s_lens,lens_l=[],[],[]
-# for path in acdc_paths:
-#     gl,sl,lens_dist=cc_lengths(expmt_path+'/cell_measure'+'/'+path)
-#     g_lens.append(gl)
-#     s_lens.append(sl)
-#     lens_l.append(lens_dist)
-# g_lens=[element for innerList in g_lens for element in innerList]
-# s_lens=[element for innerList in s_lens for element in innerList]
-# lens_l=[element for innerList in lens_l for element in innerList]
-
-# camsamprate=5
-# plt.figure()
-# plt.xlabel('# frames ('+str(camsamprate)+' min interval)')
-# plt.title('Mother Cell CC Phase Annotation Lengths')
-# bins=np.arange(0,max(cclen)+20,5)
-# n0,b0,p0=plt.hist(slen,bins=bins, alpha=0.75, edgecolor='black', color='b', label='S/G2/M Phase n=('+f'{len(slen)})')
-# n1,b1,p1=plt.hist(glen, bins=bins, alpha=0.75, edgecolor='black', color='y', label='G1 Phase n=('+f'{len(glen)})')
-# n2,b2,p2=plt.hist(cclen, bins=bins, alpha=0.75, edgecolor='black', color='k', label='Total CC n=('+f'{len(cclen)})')
-# plt.legend()
+    return np.array(g1_lens)*camsamprate, np.array(s_lens)*camsamprate, np.array(cc_lens)*camsamprate
 
 # %% full cc transition indices
 def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
@@ -359,7 +330,7 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
         if num_transitions<3:
             g1_df=g1_df.drop(cell_rows.index)
         else:
-            fullcc+=1
+            fullcc+=(num_transitions//3)
             checkpoint_frame=0
             for i in range(num_transitions):
                 if i==0:
@@ -368,7 +339,6 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
                     else: #for mothers
                         checkpoint_frame = lens[0]
                     column_name='Start_Index_1'
-
                 else:
                     checkpoint_frame=checkpoint_frame+lens[i]
                 
@@ -385,18 +355,15 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
         phase_list=cell_rows['cell_cycle_stage'].values
         lens,phases,num_phases = extract_streaks(phase_list)
         ind=0
-        # if cell_rows['frame_i'].values[0]!=0: #for G1 buds
-        #     ind+=1
         num_transitions = num_phases-1+ind
 
         if num_transitions<3:
             s_df=s_df.drop(cell_rows.index)
         else:
-            fullcc+=1
+            fullcc+=(num_transitions//3)
             checkpoint_frame=0
             for i in range(num_transitions):
                 checkpoint_frame=checkpoint_frame+lens[i]
-                
                 if i%2==0:
                     column_name='Div_Index_'+str(int(i/2 + 1))
                 else: #for G1 phase
@@ -405,200 +372,278 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
                 column_vals=[(cell_rows['frame_i'].values[j]-checkpoint_frame) for j in range(len(cell_rows))]
                 s_df.loc[s_df.Cell_ID==cell_id, column_name]=column_vals
 
-    print('# full cell cycles = '+str(fullcc))
-    return g1_df, s_df
+    print(f"# cells with full cell cycles = {fullcc}")
+
+    # return g1_df, s_df
+    return pd.concat([g1_df, s_df], ignore_index=True)
 
 # %% full cc organelle analysis
 def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, cam_samprate: int=5, con_samprate: int=60):
     """
     Args: List of paths to raw acdc csvs and organelle measure csvs.
-    Outputs: G1 and S/G2/M csvs containing geometric cell, cell cycle, and organelle information.
+    Outputs: One df containing geometric cell, cell cycle, and organelle information. Option to save to csv file.
     """
 
-    g1_dfs=[]
-    s_dfs=[]
-
-    for cell_path in cell_dfpaths:
+    cdfs=[]
+    # for cell_path in cell_dfpaths:
         # celldf=pd.read_csv(cell_path)
-        g1df_sort, sdf_sort = cc_sort(cell_path)
-        g1_df, s_df = find_full_transitions(g1df_sort, sdf_sort)
-        path_parts=cell_path.stem.split("_")
-        date=path_parts[1]
-        fov=path_parts[4]
+    cell_path=cell_dfpaths[0]
+    g1df_sort, sdf_sort = cc_sort(cell_path)
+    celldf = find_full_transitions(g1df_sort, sdf_sort)
+    path_parts=cell_path.stem.split("_")
+    date=path_parts[1]
+    fov=path_parts[4]
 
-        for cell_id in np.unique(g1_df['Cell_ID'].values):
-            cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id]
-            start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
-            div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
-            start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i'].values[0]
-            cc_length = (start_2 - start_1) * cam_samprate
+    for cell_id in np.unique(celldf['Cell_ID'].values):
+        cell_rows=celldf.loc[celldf.Cell_ID==cell_id]
+        cell_metrics={
+            "Cell_ID"           : [cell_id],
+            "date"              : [date], 
+            "fov"               : [fov]
+        }
+
+        start_1_frame=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0] #for use in filtering negative time frac buds
+        div_1_frame=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
+        
+        div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i']
+        if div_2.empty==False:
+            div_2_frame=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0]
+        else: #for those cells that fully pass Start_1 to Start_2 but not Div_2
+            start_2_frame=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i'].values[0]
             
-            cell_metrics={
-                "Cell_ID"           : [cell_id],
-                "date"              : [date], 
-                "fov"               : [fov],
-                "relationship"      : [cell_rows['relationship'].values[0]],
-                # "transitions"       : [cell_rows['transitions'].values[0]],
-                "cc_length"         : [cc_length]
-            }
-            result=cell_metrics
+        div_3=cell_rows.loc[cell_rows.Div_Index_3==0, 'frame_i']
+        if div_3.empty==False:
+            div_3_frame=cell_rows.loc[cell_rows.Div_Index_3==0, 'frame_i'].values[0]
+        
+        div_4=cell_rows.loc[cell_rows.Div_Index_4==0, 'frame_i']
+        if div_4.empty==False:
+            div_4_frame=cell_rows.loc[cell_rows.Div_Index_4==0, 'frame_i'].values[0]
 
-            for org_path in org_dfpaths: 
-                meta=parse_meta_orgmeasure(org_path.stem)
-                org_label=meta['organelle']
-                orgdf=pd.read_csv(org_path)
-                org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
+        min_frame=ceildiv(np.min(cell_rows['time_minutes'].values), con_samprate)
+        max_frame=ceildiv(np.max(cell_rows['time_minutes'].values), con_samprate)
+        # for frame in np.arange(np.min(cell_rows['time_minutes'].values)//con_samprate,np.max(cell_rows['time_minutes'].values)//con_samprate+1, 1):
+        for frame in np.arange(min_frame, max_frame, 1):
+            abs_time=int(frame*con_samprate)
+            cell_frames=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'frame_i']
+            if cell_frames.empty==False: #if cell existed at conf timepoint
+                relationship=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relationship'].values[0]
+                approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
+                cell_frame=cell_frames.values[0]
 
-                for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
-                    org_frame=org_rows.loc[org_rows.time==frame]
-                    abs_time=org_frame['abs_time'].values[0]
-                    frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
-                    approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
-                    org_count=len(org_frame['idx-orga'].values)
-                    org_vox=org_rows['volume-pixel'].values
-                    if len(org_vox)>0:
-                        org_vox_tot=np.sum(org_vox)
-                    else:
-                        org_vox_tot=org_vox[0]
-                    org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
+                if div_2.empty==False and cell_frame<div_2_frame:
+                    cc_length = (div_2_frame - div_1_frame) * cam_samprate
+                    frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length)  
+                    if -1<frac_time<0:
+                        frac_time = 1 - (np.abs(frac_time) % 1)
+                        # if relationship=='mother':
+                        #     frac_time = 1 - (np.abs(frac_time) % 1)
+                        # elif relationship=='bud' and cell_frame>start_1_frame: ###need to exclude buds that have negative frac time near -1:
+                        #     frac_time = 1 - (np.abs(frac_time) % 1)
+                        # else:
+                        #     continue
+                    generation_num=1 
+                    elif frac_time<-1:
+                        continue
+                elif div_2.empty==True:
+                    cc_length = (start_2_frame - start_1_frame) * cam_samprate
+                    frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length) 
+                    if -1<frac_time<0:
+                        frac_time = 1 - (np.abs(frac_time) % 1)
+                    elif 1<frac_time<(start_2_frame+(start_2_frame - start_1_frame)):
+                        frac_time = frac_time % 1
+                    elif frac_time<-1 or frac_time>(start_2_frame+(start_2_frame - start_1_frame)):
+                        continue
+                    generation_num=1  
+                elif div_3.empty==False and cell_frame<div_3_frame:
+                    cc_length = (div_3_frame - div_2_frame) * cam_samprate
+                    frac_time = (abs_time - (div_2_frame * cam_samprate)) / (cc_length)
+                    generation_num=2
+                elif div_4.empty==False and cell_frame<div_4_frame:
+                    cc_length = (div_4_frame - div_3_frame) * cam_samprate
+                    frac_time = (abs_time - (div_3_frame * cam_samprate)) / (cc_length)
+                    generation_num=3
+                else:
+                    continue
+                real_time = frac_time * cc_length
 
-                    org_metrics={
-                        "abs_time"         : [abs_time],
-                        "frac_time"        : [frac_time],
-                        "approx_vol"       : [approx_vol],
-                        "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
-                        "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
-                        org_label+"_vox"   : [org_vox_tot],
-                        org_label+"_frac"  : [org_vol_frac],
-                        org_label+"_count" : [org_count]
+                more_cell_metrics={                        
+                    "relationship"     : [relationship],
+                    "abs_time"         : [abs_time],
+                    "frac_time"        : [frac_time],
+                    "cc_length"        : [cc_length],
+                    "real_time"        : [real_time],
+                    "generation"       : [generation_num],
+                    "approx_vol"       : [approx_vol],
+                    "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
+                    "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
+                    }
+                results=cell_metrics | more_cell_metrics
+
+                for org_path in org_dfpaths: 
+                    orgdf=pd.read_csv(org_path)
+                    org_rows=orgdf.loc[orgdf.idx_cell==cell_id].loc[orgdf.abs_time==abs_time]
+                    org_vox=org_rows['volume-pixel'].dropna().values #drop any NaNs
+                    if len(org_vox)>0: #if org measurement exists at this time
+                        meta=parse_meta_orgmeasure(org_path.stem)
+                        org_label=meta['organelle']
+                        org_frame=org_rows.loc[org_rows.abs_time==abs_time]
+                        org_count=len(org_frame['idx-orga'].values)
+                    
+                        if len(org_vox)>1:
+                            org_vox_tot=np.sum(org_vox)
+                        else:
+                            org_vox_tot=org_vox[0]
+                        org_vol_frac=(org_vox_tot*(cam_pxl_size**2)*(zstepsize)) / approx_vol
+
+                        if org_label=='vo':
+                            eccentricity=org_rows['eccentricity'].values[0]
+                        else:
+                            eccentricity=0
+                        org_metrics={
+                            org_label+"_vol"   : [org_vox_tot],
+                            org_label+"_frac"  : [org_vol_frac],
+                            org_label+"_count" : [org_count],
+                            org_label+"_ecc"   : [eccentricity]
                             }
-            
-                    results = result | org_metrics
-                    g1_dfs.append(pd.DataFrame(results))
-
-        for cell_id in np.unique(s_df['Cell_ID'].values):
-            cell_rows=s_df.loc[s_df.Cell_ID==cell_id]
-            div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
-            start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
-            div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0]
-            cc_length = (div_2 - div_1) * cam_samprate
-            
-            cell_metrics={
-                "Cell_ID"           : [cell_id],
-                "date"              : [date], 
-                "fov"               : [fov],
-                "relationship"      : [cell_rows['relationship'].values[0]],
-                # "transitions"       : [cell_rows['transitions'].values[0]],
-                "cc_length"         : [cc_length]
-            }
-            result=cell_metrics
-
-            for org_path in org_dfpaths: 
-                meta=parse_meta_orgmeasure(org_path.stem)
-                org_label=meta['organelle']
-                orgdf=pd.read_csv(org_path)
-                org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
-
-                for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
-                    org_frame=org_rows.loc[org_rows.time==frame]
-                    abs_time=org_frame['abs_time'].values[0]
-                    frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
-                    approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
-                    org_count=len(org_frame['idx-orga'].values)
-                    org_vox=org_rows['volume-pixel'].values
-                    if len(org_vox)>0:
-                        org_vox_tot=np.sum(org_vox)
+                    
+                        results = results | org_metrics
                     else:
-                        org_vox_tot=org_vox[0]
-                    org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
-
-                    org_metrics={
-                        "abs_time"         : [abs_time],
-                        "frac_time"        : [frac_time],
-                        "approx_vol"       : [approx_vol],
-                        "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
-                        "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
-                        org_label+"_vox"   : [org_vox_tot],
-                        org_label+"_frac"  : [org_vol_frac],
-                        org_label+"_count" : [org_count]
-                            }
-            
-                    results = result | org_metrics
-                    s_dfs.append(pd.DataFrame(results))
-
-        g1_org_df=pd.concat(g1_dfs, ignore_index=True)
-        s_org_df=pd.concat(s_dfs, ignore_index=True)
-
-    g1_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
-    s_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
+                        continue
+                cdfs.append(pd.DataFrame(results))
+                
+        if len(cdfs)>0:
+            out_df=pd.concat(cdfs, ignore_index=True)
+    
+    out_df.sort_values(by=["frac_time", "Cell_ID"], inplace=True, ignore_index=True)
 
     if save_csv==True:
-        g1_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
-        s_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
+        out_df.to_csv(Path(expmt_path+'\cc_measure')/f"orgdf_{meta['date']}.csv",index=False)
+    return out_df
 
-
-    return g1_org_df, s_org_df
 # %% plot full cc org dynamics
 def extract_frame_metrics(cellrows: pd.DataFrame, org: str, metric: str):
     """
-    Args: (frac, count, vox)
+    Args: processed org df, org label, metric (frac, count, vol, ecc)
     Outputs: Two 1D arrays containing fractional time x-coords and chosen metric y-coords.
     """
     frac_times = cellrows['frac_time'].values
+    real_times = cellrows['real_time'].values
     metric_arr = cellrows[org+'_'+metric].values
 
-    return frac_times, metric_arr
+    return frac_times, real_times, metric_arr
 
-def plot_fullcc(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame, org_label: str, xl: float=-.5, xr: float=1.5, ms: int=5):
+def plot_fullcc(org_df: pd.DataFrame, org_label: str, xl: float=-.5, xr: float=1.5, ms: int=2):
     """
-    Args: Two dataframes for either G1 or S/G2/M; x-axis bound param, set markersize.
-    Outputs: Plots of org metric vs cc positions for either df. Option to save plots.
+    Args: One df containing both G1 or S/G2/M info, organelle label, x-axis bound param, set markersize.
+    Outputs: Plots of org metric vs cc position.
     """ 
-    metrics=['frac', 'count']
+    # metrics=['frac', 'count']
+    if org_label=='vo':
+        metrics=['frac', 'vol', 'ecc']
+    else:
+        metrics=['frac', 'vol', 'count']
+
     fig,axes=plt.subplots(nrows=2,ncols=len(metrics))
-    for cell in np.unique(g1_org_df['Cell_ID'].values):
-        cell_rows=g1_org_df.loc[g1_org_df.Cell_ID==cell]
-        if cell_rows['relationship'].values[0]=='mother':
-            markerstyle='o'
-            color='k'
-        else:
-            markerstyle='s'
-            color='r'
+    tally=0
+    for cell in np.unique(org_df['Cell_ID'].values):
+        cell_rows=org_df.loc[org_df.Cell_ID==cell]
+        date=cell_rows["date"].values[0]
+        mom_rows=cell_rows.loc[cell_rows.relationship=="mother"]
+        bud_rows=cell_rows.loc[cell_rows.relationship=="bud"]
 
-        # for i in range(len(orgs)): 
-        #     org_label=orgs[i]
-
-        for j in range(len(metrics)):
-            times, m_arr = extract_frame_metrics(cell_rows, org_label, metrics[j])
-            axes[0, j].errorbar(times, m_arr, yerr=0, ls='none', c=color,marker=markerstyle,ms=ms)
-            axes[0, j].set_xlabel('Normalized CC Position (Bud to Bud)')
-        axes[0, 0].set_title('G1 '+org_label+' Vol Frac vs CC position')
-        axes[0, 1].set_title('G1 '+org_label+' Count vs CC position')
-        
-
-    for cell in np.unique(s_org_df['Cell_ID'].values):
-        cell_rows=s_org_df.loc[s_org_df.Cell_ID==cell]
-        if cell_rows['relationship'].values[0]=='mother':
-            markerstyle='o'
-            color='k'
-        else:
-            markerstyle='s'
-            color='r'
-
-        # for i in range(len(orgs)): 
-        #     org_label=orgs[i]
+        # if cell_rows['relationship'].values[0]=='mother':
+        #     markerstyle='o'
+        #     color='k'
+        # else:
+        #     markerstyle='s'
+        #     color='r'
 
         for j in range(len(metrics)):
-            times, m_arr = extract_frame_metrics(cell_rows, org_label, metrics[j])
-            axes[1, j].errorbar(times, m_arr, yerr=0, ls='none', c=color,marker=markerstyle,ms=ms)
-            axes[1, j].set_xlabel('Normalized CC Position (Div to Div)')
-        axes[1, 0].set_title('S '+org_label+' Vol Frac vs CC position')
-        axes[1, 1].set_title('S '+org_label+' Count vs CC position')
+            frac_times, real_times, m_arr = extract_frame_metrics(mom_rows, org_label, metrics[j])
+            if len(m_arr)>0:
+                axes[0,j].errorbar(frac_times, m_arr, yerr=0, ls='none', c='b',marker='o',ms=ms)
+                axes[1, j].errorbar(real_times, m_arr, yerr=0, ls='none', c='b',marker='o',ms=ms)
+                if j==1:
+                    tally+=len(m_arr)
+            frac_times, real_times, m_arr = extract_frame_metrics(bud_rows, org_label, metrics[j])
+            if len(m_arr)>0:
+                axes[0,j].errorbar(frac_times, m_arr, yerr=0, ls='none', c='r',marker='s',ms=ms)
+                axes[1, j].errorbar(real_times, m_arr, yerr=0, ls='none', c='r',marker='s',ms=ms)
+                if j==1:
+                    tally+=len(m_arr)
 
+    for j in range(len(metrics)):
+        axes[0,j].set_xlabel('Normalized CC \n Position (Div to Div)')
+        axes[1,j].set_xlabel('Time Relative \n to Previous Division (min)')
+        axes[0,j].set_title(f"Unbinned {org_label} {metrics[j]} \n vs CC position")
 
     fig.tight_layout()
+    print(f"{org} n: {tally} data points")
     return
+# %% Bin full org dynamics
+def plot_fullccbin(org_df: pd.DataFrame, org_label: str, binwidth: int=.05, ms: int=5):
+    '''
+    Args: One df containing both G1 or S/G2/M info, organelle label, ARG ABOUT BIN WIDTH OR RAW VS FRAC TIME
+    Outputs: Plots of binned org metric vs cc position.
+    '''
+    #MAYBE ADD GENERATION AND/OR DATE COLOR CODE INTO HERE
+    #bin frac or real times by 5-10%, avg, plot error scatter
 
+    if org_label=='vo':
+        metrics=['frac', 'vol', 'ecc']
+    else:
+        metrics=['frac', 'vol', 'count']
+
+    fig,axes=plt.subplots(nrows=2,ncols=len(metrics))
+    bin_edges=np.linspace(0, np.max([max(org_df['frac_time'].values),1]), int(1//binwidth))
+    tally=0
+    for i in range(len(bin_edges)-1):
+        l_bound, r_bound = bin_edges[i], bin_edges[i+1]
+        fracbin_rows=org_df.loc[(org_df.frac_time>=l_bound) & (org_df.frac_time<=r_bound)]
+        mom_rows=fracbin_rows.loc[fracbin_rows.relationship=="mother"]
+        bud_rows=fracbin_rows.loc[fracbin_rows.relationship=="bud"]
+        frac_time=(l_bound+r_bound)/2
+
+        for j in range(len(metrics)):
+            m_arr=mom_rows[org+'_'+metrics[j]].dropna().values #Drop NaNs from stats
+            if len(m_arr)>0:
+                axes[0,j].errorbar(frac_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='b',marker='o',ms=ms)
+                axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")            
+                if j==1:
+                    tally+=int(len(m_arr))
+            m_arr=bud_rows[org+'_'+metrics[j]].dropna().values
+            if len(m_arr)>0:
+                axes[0,j].errorbar(frac_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='r',marker='s',ms=ms)
+                axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+                if j==1:
+                    tally+=int(len(m_arr))
+
+    bin_edges=np.linspace(0, max(org_df['cc_length'].values), int(1//(binwidth)))
+    for i in range(len(bin_edges)-1):
+        l_bound, r_bound = bin_edges[i], bin_edges[i+1]
+        realbin_rows=org_df.loc[(org_df.real_time>=l_bound) & (org_df.real_time<=r_bound)]
+        mom_rows=realbin_rows.loc[realbin_rows.relationship=="mother"]
+        bud_rows=realbin_rows.loc[realbin_rows.relationship=="bud"]
+        real_time=(l_bound+r_bound)/2
+
+        for j in range(len(metrics)):
+            m_arr=mom_rows[org+'_'+metrics[j]].dropna().values #Drop NaNs from stats
+            if len(m_arr)>0:
+                axes[1,j].errorbar(real_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='b',marker='o',ms=ms)
+                axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+            m_arr=bud_rows[org+'_'+metrics[j]].dropna().values
+            if len(m_arr)>0:
+                axes[1,j].errorbar(real_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='r',marker='s',ms=ms)
+                axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+
+    for j in range(len(metrics)):
+        axes[0,j].set_xlabel('Normalized CC \n Position (Div to Div)')
+        axes[1,j].set_xlabel('Time Relative \n to Previous Division (min)')
+        axes[0,j].set_title(f"Binned {org_label} {metrics[j]} \n vs CC position")
+    fig.tight_layout()
+
+    print(f"Number of {org} data points in binned graphs: {tally}")
+    return 
 # %% ALL cc transition indices
 def find_all_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
     """
@@ -1195,545 +1240,184 @@ def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
 
     return 
 
-# %% Myo1 dynamics analysis
-def ticks(myo1_df: pd.DataFrame, thresh: float=0.5):
-    """
-    Args: Dataframe containing extracted roi info to be analyzed.
-    Outputs: Dataframe containing up and/or down tick frames for each unique roi. 
-    """
-    dfs=[]
-    for roi_id in np.unique(myo1_df['ROI_ID'].values):
-        vals=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'sum'].values
-        vals=vals/np.max(vals)
-        yi=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'y'].values[0]
-        xi=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'x'].values[0]
-        frames=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'frame'].values
-
-        on_indices=np.where(vals>thresh)[0]
-        off_indices=np.where(vals<thresh)[0]
-        start_frame=None
-        div_frame=None
-
-        pre_on=[x for x in off_indices if x<on_indices[0]]
-        if len(pre_on)>0:
-            start_frame=frames[pre_on[-1]]+1  
-        post_on=[x for x in off_indices if x>on_indices[-1]]
-        if len(post_on)>0:
-            div_frame=frames[post_on[0]]
-
-        if len(pre_on)>0 or len(post_on)>0: #if there is an up/downtick, save info
-            metrics={
-                "ROI_ID"      : [roi_id],
-                "y"           : [yi],
-                "x"           : [xi],
-                "Start_Frame" : [start_frame],
-                "Div_Frame"   : [div_frame]
-            }
-
-            roi_df=pd.DataFrame(metrics)
-            dfs.append(roi_df)
-    output_df=pd.concat(dfs, ignore_index=True)
-    return output_df
-
-def diff_dist(img_df: pd.DataFrame):
-    """
-    Args: Dataframe containing myo1 roi intensity information.
-    Outputs: 1D array containing distribution of changes in roi intensity.
-    """
-    diffs=[]
-    for roi_id in np.unique(img_df['ROI_ID'].values):
-        vals=img_df.loc[img_df.ROI_ID==roi_id, 'sum'].values
-        vals=vals/np.max(vals)
-        diffs.append(np.diff(vals))
-    return np.concatenate(diffs)
-
-def sum_dist(img_df: pd.DataFrame):
-    """
-    Args: Dataframe containing myo1 roi intensity information.
-    Outputs: 1D array containing distribution of roi intensities.
-    """
-    sums=[]
-    for roi_id in np.unique(img_df['ROI_ID'].values):
-        vals=img_df.loc[img_df.ROI_ID==roi_id, 'sum'].values
-        vals=vals/np.max(vals)
-        sums.append(vals)
-    return np.concatenate(sums)
-# %% Autoassign myo1 roi and cellacdc IDs
-from skimage import io, draw
-from scipy import stats
-def autoassign(myo1df_path: str, cellmask_path: str, cellacdc_path: str, camsamprate: int, consamprate: int, disk_radius: int=4):
-    """
-    Args: Dataframe containing detected myo1 ROI coords, cell segmentation mask file path, and cell-acdc output csv.
-    Outputs: Dataframe containing ROI-Cell_ID assignments.
-    """
-    imgdf=pd.read_csv(myo1df_path)
-    mask=io.imread(cellmask_path)
-    acdcdf=pd.read_csv(cellacdc_path)
-    rowsout=[]
-    missed=0
-    for roi_id in np.unique(imgdf['ROI_ID'].values):
-        roi_rows=imgdf.loc[imgdf.ROI_ID==roi_id].copy()
-        frames=roi_rows['frame'].values
-        for frame_i in frames:
-            real_time=frame_i*consamprate
-            mask_frame=int(real_time/camsamprate)
-
-            yi=roi_rows.loc[roi_rows.frame==frame_i,'y'].values[0]
-            xi=roi_rows.loc[roi_rows.frame==frame_i,'x'].values[0]
-            rr, cc = draw.disk((yi, xi), disk_radius, shape=(mask.shape[1],mask.shape[2])) #draw disk around the glob
-            unique, counts = np.unique(mask[mask_frame,rr,cc][mask[mask_frame,rr,cc]>0], return_counts=True) #extract which cell masks fall within the disk and how much
-            unique, counts = list(unique), list(counts)
-            leave=False
-            while leave==False: #loop here to only assign rois to mother cells
-                if len(counts)>0:
-                    max_index=np.argmax(counts)
-                    cell_id=unique[max_index]
-                    cell_rows=acdcdf.loc[acdcdf.Cell_ID==cell_id]
-                    print(cell_id, real_time, frame_i, mask_frame)
-                    if cell_rows.empty==True or cell_rows.loc[cell_rows.frame_i==mask_frame].empty==True:
-                        del unique[max_index]
-                        del counts[max_index]
-                    elif cell_rows.loc[cell_rows.frame_i==mask_frame, 'relationship'].values[0]=='mother': 
-                        roi_rows.loc[roi_rows.frame==mask_frame, 'Cell_ID']=cell_id
-                        leave=True
-                    else:
-                        del unique[max_index]
-                        del counts[max_index]
-                else:
-                    leave=True
-                    # print((yi,xi))
-                    missed+=1
-                    continue
-
-        rowsout.append(roi_rows)
-    print("Missed cell frames: "+str(missed))
-    aadf=pd.concat(rowsout, ignore_index=True)
-    output_name='autoassigntable_r='+str(disk_radius)+'.csv'
-    output_path=Path(myo1df_path).parent/f"{output_name}"
-    aadf.to_csv(output_path, index=False)
-    return aadf
-
-
-# %% cc size and myo1 overlay
-def analyze_myo1size(cell_path: str, aa_path: str, thresh: float=0.5, cell_metric: str='cell_area_norm', myo1_metric: str='norm_int'):
-    """
-    Args: Paths to dataframes containing cell segm & annot outputs and myo1 intensity df with auto-matched cell ids.
-    Outputs: Df containing myo1 and cell metrics. By default, deals with normalized values. For raw use: ['cell_area_pxl', 'sum']
-    """
-
-    #so like, find ticks from myo1df, use detected start/div frames to choose alignment point, extract corresponding cell area frames from celldf, plot aligned
-    # then, also somehow average each profile by frame -- on that note, need to plot both sampling rates on same graph -> need to take along x-values.
-
-    celldf=pd.read_csv(cell_path)
-    g1_df,s_df=cc_sort(cell_path)
-    g1df,sdf=find_all_transitions(g1_df,s_df)
-    # g1df,sdf=find_full_transitions(g1_df,s_df)
-    g1_moms=g1df.loc[g1df.cc_group=='gmom'].copy()
-    s_moms=sdf.loc[sdf.cc_group=='smom'].copy()
-    g1_buds=g1df.loc[g1df.cc_group=='gbud'].copy()
-    s_buds=sdf.loc[sdf.cc_group=='sbud'].copy()
-
-    myo1df=pd.read_csv(aa_path)
-    ticksdf=ticks(myo1df, thresh=thresh)
-    
-    for roi_id in np.unique(myo1df['ROI_ID'].values):
-        if roi_id in ticksdf['ROI_ID'].values:
-            roi_rows=myo1df.loc[myo1df.ROI_ID==roi_id]
-            cell_id, count = stats.mode(roi_rows['Cell_ID'].values, nan_policy='omit')
-
-            if cell_id in np.unique(g1_moms["Cell_ID"].values):
-                cell_rows=g1_moms.loc[g1_moms.Cell_ID==cell_id].copy()
-
-                myo1_start=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Start_Frame'].values
-                if myo1_start!=None:
-                    start_index=[(roi_rows['frame'].values[i]-myo1_start[0]) for i in range(len(roi_rows))]
-                    myo1df.loc[myo1df.ROI_ID==roi_id, 'myo1_Start_Index']=start_index
-                    g1_moms.loc[g1_moms.Cell_ID==cell_id, 'myo1_Start_Index']=[(cell_rows['frame_i'].values[i]-myo1_start[0]) for i in range(len(cell_rows))]
-                    
-                    annot_start=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i']
-                    if annot_start.empty==False:
-                        if myo1_start[0]<annot_start.values[0]:
-                            bud_id=cell_rows.loc[cell_rows.Start_Index_1==0, 'relative_ID'].values[0]
-                            bud_rows=g1_buds.loc[g1_buds.Cell_ID==bud_id].copy()
-                            g1_buds.loc[g1_buds.Cell_ID==bud_id, 'myo1_Start_Index']=[(bud_rows['frame_i'].values[i]-myo1_start[0]) for i in range(len(bud_rows))]
-                
-                myo1_div=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Div_Frame'].values
-                if myo1_div!=None:
-                    div_index=[(roi_rows['frame'].values[i]-myo1_div[0]) for i in range(len(roi_rows))]
-                    myo1df.loc[myo1df.ROI_ID==roi_id, 'myo1_Div_Index']=div_index
-                    g1_moms.loc[g1_moms.Cell_ID==cell_id, 'myo1_Div_Index']=[(cell_rows['frame_i'].values[i]-myo1_div[0]) for i in range(len(cell_rows))]
-                    
-                    annot_div=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i']
-                    if annot_div.empty==False:
-                        if myo1_div[0]<annot_div.values[0]:
-                            bud_id=cell_rows.loc[cell_rows.Div_Index_1==-1, 'relative_ID'].values[0]
-                            bud_rows=g1_buds.loc[g1_buds.Cell_ID==bud_id].copy()
-                            g1_buds.loc[g1_buds.Cell_ID==bud_id, 'myo1_Div_Index']=[(bud_rows['frame_i'].values[i]-myo1_div[0]) for i in range(len(bud_rows))]
-                
-
-            if cell_id in np.unique(s_moms["Cell_ID"].values):
-                cell_rows=s_moms.loc[s_moms.Cell_ID==cell_id].copy()
-
-                myo1_div=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Div_Frame'].values
-                if myo1_div!=None:
-                    div_index=[(roi_rows['frame'].values[i]-myo1_div[0]) for i in range(len(roi_rows))]
-                    myo1df.loc[myo1df.ROI_ID==roi_id, 'myo1_Div_Index']=div_index
-                    s_moms.loc[s_moms.Cell_ID==cell_id, 'myo1_Div_Index']=[(cell_rows['frame_i'].values[i]-myo1_div[0]) for i in range(len(cell_rows))]
-                    
-                    annot_div=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i']
-                    if annot_div.empty==False:
-                        if myo1_div[0]<annot_div.values[0]:
-                            bud_id=cell_rows.loc[cell_rows.Div_Index_1==-1, 'relative_ID'].values[0]
-                            bud_rows=s_buds.loc[s_buds.Cell_ID==bud_id].copy()
-                            s_buds.loc[s_buds.Cell_ID==bud_id, 'myo1_Div_Index']=[(bud_rows['frame_i'].values[i]-myo1_div[0]) for i in range(len(bud_rows))]
-                
-                myo1_start=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Start_Frame'].values
-                if myo1_start!=None:
-                    start_index=[(roi_rows['frame'].values[i]-myo1_start[0]) for i in range(len(roi_rows))]
-                    myo1df.loc[myo1df.ROI_ID==roi_id, 'myo1_Start_Index']=start_index
-                    s_moms.loc[s_moms.Cell_ID==cell_id, 'myo1_Start_Index']=[(cell_rows['frame_i'].values[i]-myo1_start[0]) for i in range(len(cell_rows))]
-                    
-                    annot_start=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i']
-                    if annot_start.empty==False:
-                        if myo1_start[0]<annot_start.values[0]:
-                            bud_id=cell_rows.loc[cell_rows.Start_Index_1==0, 'relative_ID'].values[0]
-                            bud_rows=s_buds.loc[s_buds.Cell_ID==bud_id].copy()
-                            s_buds.loc[s_buds.Cell_ID==bud_id, 'myo1_Start_Index']=[(bud_rows['frame_i'].values[i]-myo1_start[0]) for i in range(len(bud_rows))]
-
-    dfs=[]
-
-    myo1_minframe=-20
-    myo1_maxframe=20                 
-    for rel_frame in np.arange(myo1_minframe,myo1_maxframe,1):
-        myo1_start_vals=myo1df.loc[myo1df.myo1_Start_Index==rel_frame, myo1_metric].values
-        if len(myo1_start_vals)>0:
-            myo1_start_metric=np.mean(myo1_start_vals)
-            myo1_start_std=np.std(myo1_start_vals)
-            metrics={
-                "cat"           : "myo1-sta",
-                "avg"           : [myo1_start_metric],
-                "std"           : [myo1_start_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [myo1_start_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-    for rel_frame in np.arange(myo1_minframe,myo1_maxframe,1):
-        myo1_div_vals=myo1df.loc[myo1df.myo1_Div_Index==rel_frame, myo1_metric].values
-        if len(myo1_div_vals)>0:
-            myo1_div_metric=np.mean(myo1_div_vals)
-            myo1_div_std=np.std(myo1_div_vals)
-            metrics={
-                "cat"           : "myo1-div",
-                "avg"           : [myo1_div_metric],
-                "std"           : [myo1_div_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [myo1_div_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-    for rel_frame in np.arange(-50,50,1):
-        cell_start_vals=np.concatenate([g1_moms.loc[g1_moms.myo1_Start_Index==rel_frame, cell_metric].values, s_moms.loc[s_moms.myo1_Start_Index==rel_frame, cell_metric].values])
-        if len(cell_start_vals)>0:
-            cell_start_metric=np.mean(cell_start_vals)
-            cell_start_std=np.std(cell_start_vals)
-            metrics={
-                "cat"           : "mom-sta",
-                "avg"           : [cell_start_metric],
-                "std"           : [cell_start_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [cell_start_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-        cell_div_vals=np.concatenate([s_moms.loc[s_moms.myo1_Div_Index==rel_frame, cell_metric].values, g1_moms.loc[g1_moms.myo1_Div_Index==rel_frame, cell_metric].values])
-        if len(cell_div_vals)>0:
-            cell_div_metric=np.mean(cell_div_vals)
-            cell_div_std=np.std(cell_div_vals)
-            metrics={
-                "cat"           : "mom-div",
-                "avg"           : [cell_div_metric],
-                "std"           : [cell_div_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [cell_div_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-        cell_div_vals=np.concatenate([s_buds.loc[s_buds.myo1_Div_Index==rel_frame, cell_metric].values, g1_buds.loc[g1_buds.myo1_Div_Index==rel_frame, cell_metric].values])
-        if len(cell_div_vals)>0:
-            cell_div_metric=np.mean(cell_div_vals)
-            cell_div_std=np.std(cell_div_vals)
-            metrics={
-                "cat"           : "bud-div",
-                "avg"           : [cell_div_metric],
-                "std"           : [cell_div_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [cell_div_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-    for rel_frame in np.arange(0,50,1):
-        cell_start_vals=np.concatenate([g1_buds.loc[g1_buds.myo1_Start_Index==rel_frame, cell_metric].values, s_buds.loc[s_buds.myo1_Start_Index==rel_frame, cell_metric].values])
-        if len(cell_start_vals)>0:
-            cell_start_metric=np.mean(cell_start_vals)
-            cell_start_std=np.std(cell_start_vals)
-            metrics={
-                "cat"           : "bud-sta",
-                "avg"           : [cell_start_metric],
-                "std"           : [cell_start_std],
-                "rel_frame"     : [rel_frame],
-                "vals"          : [cell_start_vals]
-            }
-            df=pd.DataFrame(metrics)
-            dfs.append(df)
-
-    metric_df=pd.concat(dfs, ignore_index=True)
-    return metric_df
-
-# %% Plot myo1 intensity profiles
-def plot_myo1(mdf: pd.DataFrame, con_samprate: int=5, ms: int=5):
-    """
-    Args: df containing processed cell and myo1 data; misc params for plotting
-    Outputs: Plot displaying myo1 intensity as fnc of time.
-    """
-    fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-
-    myo1sta=mdf.loc[mdf.cat=='myo1-sta']
-    for time in myo1sta['rel_frame'].values: 
-        y=myo1sta.loc[myo1sta.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*con_samprate for i in range(len(y))])
-        axes[0].scatter(x, y,s=5,c='k',marker='o')
-        # axes[0].set_ylim(-5,5)
-    
-    myo1div=mdf.loc[mdf.cat=='myo1-div']
-    for time in myo1div['rel_frame'].values:      
-        y=myo1div.loc[myo1div.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*con_samprate for i in range(len(y))])
-        axes[1].scatter(x, y,s=5,c='k',marker='o')
-
-    axes[0].set_title('Myo1 Intensity vs CC Position \n about Bud Neck Formation')
-    axes[0].set_xlabel('Time Relative to Bud Neck Formation (min)')
-    axes[0].set_ylabel('Estimated Cell Volume (um^3)')
-    axes[1].set_title('Myo1 Intensity vs CC Position \n about Cell Division')
-    axes[1].set_xlabel('Time Relative to Division (min)')
-    plt.tight_layout()
-
-# %% Plot mother/daughter sizes relative to myo1 on/off
-def plot_cc_size(mdf: pd.DataFrame, cam_samprate: int=2, con_samprate: int=5, ms: int=5):
-    """
-    Args: df containing processed cell and myo1 data; misc params for plotting
-    Outputs: Plot displaying cell size overlay as function of myo1 dynamics.
-    """
-    fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-
-    momsta=mdf.loc[mdf.cat=='mom-sta']
-    for time in momsta['rel_frame'].values: 
-        y=momsta.loc[momsta.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*cam_samprate for i in range(len(y))])
-        axes[0].scatter(x, y,s=5,c='k',marker='o')
-        # axes[0].set_ylim(-5,5)
-    
-    momdiv=mdf.loc[mdf.cat=='mom-div']
-    for time in momdiv['rel_frame'].values:      
-        y=momdiv.loc[momdiv.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*cam_samprate for i in range(len(y))])
-        axes[1].scatter(x, y,s=5,c='k',marker='o')
-
-    budsta=mdf.loc[mdf.cat=='bud-sta']
-    for time in budsta['rel_frame'].values:     
-        y=budsta.loc[budsta.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*cam_samprate for i in range(len(y))])
-        axes[0].scatter(x, y,s=5,c='r',marker='s')
-
-    buddiv=mdf.loc[mdf.cat=='bud-div']
-    for time in buddiv['rel_frame'].values:      
-        y=buddiv.loc[buddiv.rel_frame==time, 'vals'].values[0]
-        x=np.array([int(time)*cam_samprate for i in range(len(y))])
-        axes[1].scatter(x, y,s=5,c='r',marker='s')
-
-    axes[0].set_title('Cell Volume vs CC Position \n about Bud Neck Formation')
-    axes[0].set_xlabel('Time Relative to Bud Neck Formation (min)')
-    axes[0].set_ylabel('Estimated Cell Volume (um^3)')
-    axes[1].set_title('Cell Volume vs CC Position \n about Cell Division')
-    axes[1].set_xlabel('Time Relative to Division (min)')
-    plt.tight_layout()
-
-# %% Plot myo1 intensity - cell size overlay
-def plot_myo1_overlay(mdf: pd.DataFrame, cam_samprate: int=2, con_samprate: int=5, bin_ss: bool=True, ms: int=5):
-    """
-    Args: df containing processed cell and myo1 data; misc params for plotting
-    Outputs: Plot displaying binned myo1 intensity and cell size as function of myo1 dynamics.
-    """
-    fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-    axes[0].errorbar(mdf.loc[mdf.cat=='myo1-sta', 'rel_frame'].values*con_samprate, mdf.loc[mdf.cat=='myo1-sta', 'avg'].values, yerr=mdf.loc[mdf.cat=='myo1-sta', 'std'].values,ls='none', c='m',marker='o', ms=ms)
-    axes[1].errorbar(mdf.loc[mdf.cat=='myo1-div', 'rel_frame'].values*con_samprate, mdf.loc[mdf.cat=='myo1-div', 'avg'].values, yerr=mdf.loc[mdf.cat=='myo1-div', 'std'].values,ls='none', c='m',marker='o', ms=ms)
-    axes[0].errorbar(mdf.loc[mdf.cat=='mom-sta', 'rel_frame'].values*cam_samprate, mdf.loc[mdf.cat=='mom-sta', 'avg'].values, yerr=mdf.loc[mdf.cat=='mom-sta', 'std'].values,ls='none', c='k',marker='o', ms=ms)
-    axes[1].errorbar(mdf.loc[mdf.cat=='mom-div', 'rel_frame'].values*cam_samprate, mdf.loc[mdf.cat=='mom-div', 'avg'].values, yerr=mdf.loc[mdf.cat=='mom-div', 'std'].values,ls='none', c='k',marker='o', ms=ms)
-    axes[0].errorbar(mdf.loc[mdf.cat=='bud-sta', 'rel_frame'].values*cam_samprate, mdf.loc[mdf.cat=='bud-sta', 'avg'].values, yerr=mdf.loc[mdf.cat=='bud-sta', 'std'].values,ls='none', c='r',marker='s', ms=ms)
-    axes[1].errorbar(mdf.loc[mdf.cat=='bud-div', 'rel_frame'].values*cam_samprate, mdf.loc[mdf.cat=='bud-div', 'avg'].values, yerr=mdf.loc[mdf.cat=='bud-div', 'std'].values,ls='none', c='r',marker='s', ms=ms)
-
-    if bin_ss==True:
-        for i in range(len(mdf.loc[mdf.cat=='myo1-sta', 'rel_frame'].values)):
-            axes[0].text(mdf.loc[mdf.cat=='myo1-sta', 'rel_frame'].values[i]*con_samprate,  mdf.loc[mdf.cat=='myo1-sta', 'avg'].values[i]+0.025, int(len(mdf.loc[mdf.cat=='myo1-sta', 'vals'].values[i])), ha="center", fontsize="small")
-            # axes[1].text(myo1stats_div[:,0][i]*con_samprate, myo1stats_div[:,1][i]+0.025, int(myo1stats_div[:,3][i]), ha="center", fontsize="small")
-        # for i in range(len(momstats_sta[:,0])):
-        #     axes[0].text(momstats_sta[:,0][i]*cam_samprate, momstats_sta[:,1][i]+0.025, int(momstats_sta[:,3][i]), ha="center", fontsize="small")
-        #     axes[1].text(momstats_div[:,0][i]*cam_
-        # samprate, momstats_div[:,1][i]+0.025, int(momstats_div[:,3][i]), ha="center", fontsize="small")
-        # for i in range(len(budstats_div[:,0])): 
-        #     axes[0].text(budstats_sta[:,0][i]*cam_samprate, budstats_sta[:,1][i]+0.025, int(budstats_sta[:,3][i]), ha="center", fontsize="small")
-        #     axes[1].text(budstats_div[:,0][i]*cam_samprate, budstats_div[:,1][i]+0.025, int(budstats_div[:,3][i]), ha="center", fontsize="small")
-
-    axes[0].set_title('Cell Volume vs CC Position \n about Bud Neck Formation')
-    axes[0].set_xlabel('Time Relative to Bud Neck Formation (min)')
-    axes[0].set_ylabel('Average Estimated Cell Volume Normalized (vox)')
-    axes[1].set_title('Cell Volume vs CC Position \n about Division')
-    axes[1].set_xlabel('Time Relative to Division (min)')
-    ax2y=axes[1].twinx()
-    ax2y.set_ylabel('Average Normalized Myo1 Intensity', color='m')
-    plt.tight_layout()
-
-# %% finding cc differences
-import math
-from scipy import stats
-def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.5, camsamprate: int=2, consamprate: int=5):
-    """
-    Args: Paths to cell segm output csv, myo1 img csv. Param for tick function and frame to min unit conversions.
-    Outputs: Tuple of arrays containing the frame differences in cc progression between myo1 signal and manual annotations
-    """
-    # nov0525_ignore=[490,409,472,192,323,304,434,468,468,482,524,453,465]
-    # ignore_list=[]
-    # acdcdf=pd.read_csv(cell_path)
-    myo1df=pd.read_csv(aamyo1_path)
-    ticksdf=ticks(myo1df,thresh=thresh)
-    g1_df,s_df=cc_sort(cell_path)
-    g1df, sdf = find_all_transitions(g1_df, s_df) 
-    all_cells=pd.concat([g1df, sdf], ignore_index=True)
-    myo1start, myo1div =[],[]
-    dfs=[]
-
-    for roi_id in np.unique(myo1df['ROI_ID'].values):
-        if roi_id in ticksdf['ROI_ID'].values:
-            roi_rows=myo1df.loc[myo1df.ROI_ID==roi_id]
-            cell_id, count = stats.mode(roi_rows['Cell_ID'].values, nan_policy='omit')
-            if cell_id in all_cells['Cell_ID'].values:
-                # if cell_id not in ignore_list:
-                cell_rows=all_cells.loc[all_cells.Cell_ID==cell_id].copy()
-                cc_group=cell_rows['cc_group'].values[0]
-
-                annot_start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i']
-                annot_start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i']
-                if annot_start_1.empty==False:
-                    myo1_start=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Start_Frame'].values
-                    if myo1_start!=None:
-                        if (start_diff_1:=(camsamprate*annot_start_1.values[0]-consamprate*myo1_start[0]))>0:
-                            myo1start.append(start_diff_1)
-                            metrics={
-                                        "Cell_ID"      : [cell_id], 
-                                        "ROI_ID"       : [roi_id],
-                                        "cc_group"     : [cc_group[1:]],
-                                        "start_diff"   : [start_diff_1],
-                                    }
-                            metric_df=pd.DataFrame(metrics)
-                            dfs.append(metric_df)
-                            # if start_diff_1>32:
-                            #     print('Start'+str((cell_id, roi_id, start_diff_1)))
-                        elif annot_start_2.empty==False:
-                            if (start_diff_2:=(camsamprate*annot_start_2.values[0]-consamprate*myo1_start[0]))>0:
-                                myo1start.append(start_diff_2)
-                                metrics={
-                                        "Cell_ID"      : [cell_id], 
-                                        "ROI_ID"       : [roi_id],
-                                        "cc_group"     : [cc_group[1:]],
-                                        "start_diff"   : [start_diff_2],
-                                        }
-                                metric_df=pd.DataFrame(metrics)
-                                dfs.append(metric_df)
-                                # if start_diff_2>32:
-                                #     print('Start'+str((cell_id, roi_id, start_diff_2)))
-                        
-
-                annot_div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i']
-                annot_div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i']
-                if annot_div_1.empty==False:
-                    myo1_div=ticksdf.loc[ticksdf.ROI_ID==roi_id, 'Div_Frame'].values
-                    if myo1_div!=None:
-                        if (div_diff_1:=(camsamprate*annot_div_1.values[0]-consamprate*myo1_div[0]))>0:
-                            myo1div.append(div_diff_1)
-                            metrics={
-                                        "Cell_ID"      : [cell_id], 
-                                        "ROI_ID"       : [roi_id],
-                                        "cc_group"     : [cc_group[1:]],
-                                        "div_diff"     : [div_diff_1],
-                                    }
-                            metric_df=pd.DataFrame(metrics)
-                            dfs.append(metric_df)
-                            # if 45>div_diff_1>22:
-                            #     print('Div'+str((cell_id, roi_id, div_diff_1)))
-                        elif annot_div_2.empty==False:
-                            if (div_diff_2:=(camsamprate*annot_div_2.values[0]-consamprate*myo1_div[0]))>0:
-                                myo1div.append(div_diff_2)
-                                metrics={
-                                            "Cell_ID"      : [cell_id], 
-                                            "ROI_ID"       : [roi_id],
-                                            "cc_group"     : [cc_group[1:]],
-                                            "div_diff"     : [div_diff_2],
-                                        }
-                                metric_df=pd.DataFrame(metrics)
-                                dfs.append(metric_df)
-
-                            #    if 45>div_diff_2>22:
-                            #     print('Div'+str((cell_id, roi_id, div_diff_2)))
-
-    print(len(myo1start), len(myo1div))
-    diff_df=pd.concat(dfs, ignore_index=True)
-    # return myo1start, myo1div
-    return diff_df
-    # return all_cells, ticksdf
-    # return g1_moms
-# %% Plot cc uncertainty histograms
-def plot_distr(diff_df: pd.DataFrame):
-    """
-    Args: Dataframe containing difference measurements between annotations and myo1 dynamics.
-    Outputs: Two plots illustrating the distribution of said measurements.
-    """
-    ms=diff_df.loc[diff_df.cc_group=='mom', 'start_diff'].dropna().values
-    bs=diff_df.loc[diff_df.cc_group=='bud', 'start_diff'].dropna().values
-    md=diff_df.loc[diff_df.cc_group=='mom', 'div_diff'].dropna().values
-    bd=diff_df.loc[diff_df.cc_group=='bud', 'div_diff'].dropna().values
-    
-    # ms = [i for i in ms if 45>i]
-    # md = [i for i in md if 30>i]
-    # ms, md=start_arr, div_arr
-    # fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-    plt.figure()
-    plt.xlabel('Time min')
-    plt.title('Relative difference between myo1 on/off and division annotations')
-    n0,b0,p0=plt.hist(md,bins='auto', alpha=0.75, edgecolor='black', color='b', label='Divisions (n='+f'{len(md)+len(bd)})')
-    # n1,b1,p1=plt.hist(bd,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
-    plt.legend()
-    plt.xlim(0,30)
-    plt.vlines(np.mean(md), ymin=0, ymax=max(n0),colors='k', linestyle='dashed')
-    # plt.vlines(np.mean(bd), ymin=0, ymax=max(n0),colors='orange', linestyle='dashed')
-
-    plt.figure()
-    plt.xlabel('Time (min)')
-    plt.title('Relative difference between myo1 on and bud emergence annotations})')
-    n2,b2,p2=plt.hist(np.concatenate([ms,bs]),bins='auto', alpha=0.75, edgecolor='black', color='b', label='Bud Emergence (n='+f'{len(ms)+len(bs)})')
-    # n2,b2,p2=plt.hist(ms,bins='auto', alpha=0.75, edgecolor='black', color='b', label='moms')
-    # n3,b3,p3=plt.hist(bs,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
-    plt.legend()
-    plt.xlim(0,45)
-    plt.vlines(np.mean(np.concatenate([ms,bs])), ymin=0, ymax=max(n2),colors='k', linestyle='dashed')
-    # plt.vlines(np.mean(bs), ymin=0, ymax=max(n2),colors='orange', linestyle='dashed')
-    
-
-# %% Run the codes
-# ggg,sss=analyze_fullcc(np.unique(list_cell), list_in)
+# %% Run full cc org analysis
+# odf=analyze_fullcc(np.unique(list_cell), list_in)
 # for org in orgs:
-#     plot_fullcc(ggg,sss,org)
+#     plot_fullcc(odf,org)
+#     plot_fullccbin(odf, org)
+
+# plt.figure()
+# n,b,p=plt.hist(odf['cc_length'].values, bins='auto',edgecolor='black')
+# plt.xlabel('Time (min)')
+# plt.ylabel('Number of Cell Cycles')
+# plt.title('Raw CC Lengths for 08132026')
+
+# %% Run cc lengths
+# cpaths=[list_cell[0], r'C:\Users\jglic\Downloads\07152026 3c-ey2795\cell_measure\BF-timelapse_acdc_output_07152026_cpsam-d25-ms20.csv']
+# g_lens,s_lens,lens_l=[],[],[]
+# for i in range(len(cpaths)):
+#     gl,sl,lens_dist=cc_lengths(cpaths[i])
+#     g_lens.append(gl)
+#     s_lens.append(sl)
+#     lens_l.append(lens_dist)
+# g_arr=np.concatenate(g_lens)
+# s_arr=np.concatenate(s_lens)
+# l_arr=np.concatenate(lens_l)
+
+# plt.figure()
+# plt.xlabel("Time (min)")
+# plt.title('Mother Cell CC Phase Annotation Lengths')
+## bins=np.arange(0,max(cclen)+20,5)
+# n0,b0,p0=plt.hist(s_arr,bins='auto', alpha=0.75, edgecolor='black', color='b', label='S/G2/M Phase n=('+f'{len(s_arr)})')
+# n1,b1,p1=plt.hist(g_arr, bins='auto', alpha=0.75, edgecolor='black', color='y', label='G1 Phase n=('+f'{len(g_arr)})')
+# n2,b2,p2=plt.hist(l_arr, bins='auto', alpha=0.75, edgecolor='black', color='k', label='Total CC n=('+f'{len(l_arr)})')
+# plt.legend()
+# %%
+    # # ms, md=start_arr, div_arr
+    # # fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
+    # plt.figure()
+    # plt.xlabel('Time min')
+    # plt.title('Relative difference between myo1 on/off and division annotations')
+    # n0,b0,p0=plt.hist(md,bins='auto', alpha=0.75, edgecolor='black', color='b', label='Divisions (n='+f'{len(md)+len(bd)})')
+    # # n1,b1,p1=plt.hist(bd,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
+    # plt.legend()
+    # plt.xlim(0,30)
+    # plt.vlines(np.mean(md), ymin=0, ymax=max(n0),colors='k', linestyle='dashed')
+    # # plt.vlines(np.mean(bd), ymin=0, ymax=max(n0),colors='orange', linestyle='dashed')
+
+    # plt.figure()
+    # plt.xlabel('Time (min)')
+    # plt.title('Relative difference between myo1 on and bud emergence annotations})')
+    # n2,b2,p2=plt.hist(np.concatenate([ms,bs]),bins='auto', alpha=0.75, edgecolor='black', color='b', label='Bud Emergence (n='+f'{len(ms)+len(bs)})')
+    # # n2,b2,p2=plt.hist(ms,bins='auto', alpha=0.75, edgecolor='black', color='b', label='moms')
+    # # n3,b3,p3=plt.hist(bs,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
+    # plt.legend()
+    # plt.xlim(0,45)
+    # plt.vlines(np.mean(np.concatenate([ms,bs])), ymin=0, ymax=max(n2),colors='k', linestyle='dashed')
+    # # plt.vlines(np.mean(bs), ymin=0, ymax=max(n2),colors='orange', linestyle='dashed')
+    
+# %% graveyard
+# old full cc org analysis
+############################################################################# old copy below
+    # g1_dfs=[]
+    # s_dfs=[]
+    # for cell_path in cell_dfpaths:
+    #     # celldf=pd.read_csv(cell_path)
+    #     g1df_sort, sdf_sort = cc_sort(cell_path)
+    #     g1_df, s_df = find_full_transitions(g1df_sort, sdf_sort)
+    #     path_parts=cell_path.stem.split("_")
+    #     date=path_parts[1]
+    #     fov=path_parts[4]
+
+    #     for cell_id in np.unique(g1_df['Cell_ID'].values):
+    #         cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id]
+    #         start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
+    #         div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
+    #         start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i'].values[0]
+    #         cc_length = (start_2 - start_1) * cam_samprate
+            
+    #         cell_metrics={
+    #             "Cell_ID"           : [cell_id],
+    #             "date"              : [date], 
+    #             "fov"               : [fov],
+    #             "relationship"      : [cell_rows['relationship'].values[0]],
+    #             # "transitions"       : [cell_rows['transitions'].values[0]],
+    #             "cc_length"         : [cc_length]
+    #         }
+    #         result=cell_metrics
+
+    #         for org_path in org_dfpaths: 
+    #             meta=parse_meta_orgmeasure(org_path.stem)
+    #             org_label=meta['organelle']
+    #             orgdf=pd.read_csv(org_path)
+    #             org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
+
+    #             for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
+    #                 org_frame=org_rows.loc[org_rows.time==frame]
+    #                 abs_time=org_frame['abs_time'].values[0]
+    #                 frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
+    #                 approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
+    #                 org_count=len(org_frame['idx-orga'].values)
+    #                 org_vox=org_rows['volume-pixel'].values
+    #                 if len(org_vox)>0:
+    #                     org_vox_tot=np.sum(org_vox)
+    #                 else:
+    #                     org_vox_tot=org_vox[0]
+    #                 org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
+
+    #                 org_metrics={
+    #                     "abs_time"         : [abs_time],
+    #                     "frac_time"        : [frac_time],
+    #                     "approx_vol"       : [approx_vol],
+    #                     "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
+    #                     "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
+    #                     org_label+"_vox"   : [org_vox_tot],
+    #                     org_label+"_frac"  : [org_vol_frac],
+    #                     org_label+"_count" : [org_count]
+    #                         }
+            
+    #                 results = result | org_metrics
+    #                 g1_dfs.append(pd.DataFrame(results))
+
+    #     for cell_id in np.unique(s_df['Cell_ID'].values):
+    #         cell_rows=s_df.loc[s_df.Cell_ID==cell_id]
+    #         div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
+    #         start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
+    #         div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0]
+    #         cc_length = (div_2 - div_1) * cam_samprate
+            
+    #         cell_metrics={
+    #             "Cell_ID"           : [cell_id],
+    #             "date"              : [date], 
+    #             "fov"               : [fov],
+    #             "relationship"      : [cell_rows['relationship'].values[0]],
+    #             # "transitions"       : [cell_rows['transitions'].values[0]],
+    #             "cc_length"         : [cc_length]
+    #         }
+    #         result=cell_metrics
+
+    #         for org_path in org_dfpaths: 
+    #             meta=parse_meta_orgmeasure(org_path.stem)
+    #             org_label=meta['organelle']
+    #             orgdf=pd.read_csv(org_path)
+    #             org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
+
+    #             for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
+    #                 org_frame=org_rows.loc[org_rows.time==frame]
+    #                 abs_time=org_frame['abs_time'].values[0]
+    #                 frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
+    #                 approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
+    #                 org_count=len(org_frame['idx-orga'].values)
+    #                 org_vox=org_rows['volume-pixel'].values
+    #                 if len(org_vox)>0:
+    #                     org_vox_tot=np.sum(org_vox)
+    #                 else:
+    #                     org_vox_tot=org_vox[0]
+    #                 org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
+
+    #                 org_metrics={
+    #                     "abs_time"         : [abs_time],
+    #                     "frac_time"        : [frac_time],
+    #                     "approx_vol"       : [approx_vol],
+    #                     "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
+    #                     "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
+    #                     org_label+"_vox"   : [org_vox_tot],
+    #                     org_label+"_frac"  : [org_vol_frac],
+    #                     org_label+"_count" : [org_count]
+    #                         }
+            
+    #                 results = result | org_metrics
+    #                 s_dfs.append(pd.DataFrame(results))
+
+    #     g1_org_df=pd.concat(g1_dfs, ignore_index=True)
+    #     s_org_df=pd.concat(s_dfs, ignore_index=True)
+
+    # g1_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
+    # s_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
+
+    # if save_csv==True:
+    #     g1_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
+    #     s_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
+
+
+    # return g1_org_df, s_org_df

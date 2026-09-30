@@ -77,7 +77,7 @@ def measure1organelle(path_org: str, path_cell: str, path_out: str, metadata=Non
             )
         else: #if vacuole...
             cell_minor_axis=cell["axis_minor_length"]
-            measured_orga = measure.regionprops_table(img_orga_crop, properties=('label','area','bbox_area','bbox'))
+            measured_orga = measure.regionprops_table(img_orga_crop, properties=('label','area','bbox_area','bbox', 'eccentricity'))
             vo_area=measured_orga["area"]
             vo_vol_est = vo_area * cell_minor_axis
             measured_orga["area"]=vo_vol_est
@@ -129,7 +129,7 @@ args = pd.DataFrame({
 
 # %% batch apply
 # orgs=['ld', 'gl']
-orgs=["ld"]
+orgs=["ld", "gl", "vo"]
 # orgs=["vo"]
 
 for organelle in orgs:
