@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from pathlib import Path
 import os
 import sys
@@ -31,6 +32,9 @@ orgs=['ld','gl', 'vo']
 cam_pxl_size=.108 #in microns
 zstepsize=.200 #in microns
 xbound=30
+
+divtime_shift = 15.07 #minutes #0.4 thresh
+divtime_uncertainty = 4.55 #minutes
 
 # %% pathing
 # acdc_paths=os.listdir(expmt_path+'/cell_measure')
@@ -87,6 +91,13 @@ def parse_meta_orgmeasure(name: str):
         "condition":  condition,
         "field":      field,
     }
+# %% misc functions
+#ceiling division
+def ceildiv(a, b):
+    return -(a // -b)
+# Normalization function
+def norm(arr: np.ndarray):
+    return arr/np.max(arr)
 # %% Generate input file path lists
 list_cell = [] #Initialize lists for cell and org csvs
 list_in   = [] 
@@ -110,19 +121,58 @@ for path_in in Path(expmt_path+'/org_measure').glob('*.csv'):
 #     "path_in":   list_in,
 #     "path_cell": list_cell
 # })
-# %% misc functions
-#ceiling division
-def ceildiv(a, b):
-    return -(a // -b)
-# Normalization function
-def norm(arr: np.ndarray):
-    return arr/np.max(arr)
+# %% Preprocess & clean up acdc_raw_output csv
+def pp_acdc_output(acdc_path: str, remove_dead: bool=True, remove_excl: bool=True, bud_thresh: bool=True, norm_area_col: bool=True, approx_vol_col: bool=True) -> pd.DataFrame:
+    """
+    Args: Dataframe containing Cell-ACDC output metrics and analysis information.
+    Outputs: Dataframe containing the same information sans dead or manually-excluded cells, maximum initial area bud threshold, addition of 
+            normalized cell area column, and addition of vol approximation column. Multiple keyword boolean args to control individual operations. 
+            All enabled by default.
+    """
+    df=pd.read_csv(acdc_path)
+    df.columns=df.columns.str.strip() #remove leading and trailing spaces
+
+    if remove_dead==True:
+        dead_indices=df[df['is_cell_dead']==1].index
+        if dead_indices.empty==False:
+            df=df.drop(dead_indices)
+
+    if remove_excl==True:
+        excl_indices=df[df['is_cell_excluded']==1].index
+        if excl_indices.empty==False:
+            df=df.drop(excl_indices)
+
+    initial_size_thresh=250 #px^2   #### I guess better way to do this is to ignore that Start but still utilize future information. 
+    large_bud_tally=0
+    if bud_thresh==True:
+        for cell_id in np.unique(df['Cell_ID'].values):
+            if df.loc[df.Cell_ID==cell_id, 'frame_i'].values[0]>0 and df.loc[df.Cell_ID==cell_id, 'relationship'].values[0]=='bud' and df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[0]>initial_size_thresh:
+                large_bud_indices=df.loc[df.Cell_ID==cell_id].index
+                df=df.drop(large_bud_indices)
+                large_bud_tally+=1
+    # print(f"# bud rows dropped = {large_bud_tally}")
+
+    for cell_id in np.unique(df['Cell_ID'].values):
+        cell_rows=df.loc[df.Cell_ID==cell_id]
+        if norm_area_col==True:
+            norm_area=[(cell_rows['cell_area_pxl'].values[i]/np.max(cell_rows['cell_area_pxl'].values)) for i in range(len(cell_rows))]
+            df.loc[df.Cell_ID==cell_id, 'cell_area_norm']=norm_area 
+        if approx_vol_col==True:
+            vol_estimate=[(df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[i]*df.loc[df.Cell_ID==cell_id, 'minor_axis_length'].values[i])*(cam_pxl_size**2)*(zstepsize) for i in range(len(cell_rows))]
+            df.loc[df.Cell_ID==cell_id, 'approx_vol']=vol_estimate 
+            vol_estimate_norm=vol_estimate/np.max(vol_estimate)
+            df.loc[df.Cell_ID==cell_id, 'approx_vol_norm']=vol_estimate_norm
+
+    # output_name=Path(acdc_path).stem + '_pp.csv'
+    # output_path=Path(acdc_path).parent/f"{output_name}"
+    # df.to_csv(output_path, index=False)
+    return df
 # %% Linear regression
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
-def linreg(dataset: np.ndarray, n: int=1000, train_frac=0.5, plot_graph=False):
+def linreg(dataset: np.ndarray, n: int=1000, train_frac=0.5):
     """
-    Args: 2D Array of data to perform regression upon, number of runs, fraction of data to use for training, optional graph.
+    Args: 2D Array of data to perform regression upon, number of runs, fraction of data to use for training.
     Outputs: List of regression coeff scores.
     """
     scores =[]
@@ -183,49 +233,6 @@ def find_num_transitions(cell_rows: pd.DataFrame):
         ind+=1
     
     return num_phases-1+ind
-# %% Preprocess & clean up acdc_raw_output csv
-def pp_acdc_output(acdc_path: str, remove_dead: bool=True, remove_excl: bool=True, bud_thresh: bool=True, norm_area_col: bool=True, approx_vol_col: bool=True) -> pd.DataFrame:
-    """
-    Args: Dataframe containing Cell-ACDC output metrics and analysis information.
-    Outputs: Dataframe containing the same information sans dead or manually-excluded cells, maximum initial area bud threshold, addition of 
-            normalized cell area column, and addition of vol approximation column. Multiple keyword boolean args to control individual operations. 
-            All enabled by default.
-    """
-    df=pd.read_csv(acdc_path)
-    df.columns=df.columns.str.strip() #remove leading and trailing spaces
-
-    if remove_dead==True:
-        dead_indices=df[df['is_cell_dead']==1].index
-        if dead_indices.empty==True:
-            df=df.drop(dead_indices)
-
-    if remove_excl==True:
-        excl_indices=df[df['is_cell_excluded']==1].index
-        if excl_indices.empty==True:
-            df=df.drop(excl_indices)
-
-    initial_size_thresh=150 #pixels     #### I guess better way to do this is to ignore that Start but still utilize future information. 
-    if bud_thresh==True:
-        for cell_id in np.unique(df['Cell_ID'].values):
-            if df.loc[df.Cell_ID==cell_id, 'frame_i'].values[0]>0 and df.loc[df.Cell_ID==cell_id, 'relationship'].values[0]=='bud' and df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[0]>initial_size_thresh:
-                large_bud_indices=df.loc[df.Cell_ID==cell_id].index
-                df=df.drop(large_bud_indices)
-
-    for cell_id in np.unique(df['Cell_ID'].values):
-        cell_rows=df.loc[df.Cell_ID==cell_id]
-        if norm_area_col==True:
-            norm_area=[(cell_rows['cell_area_pxl'].values[i]/np.max(cell_rows['cell_area_pxl'].values)) for i in range(len(cell_rows))]
-            df.loc[df.Cell_ID==cell_id, 'cell_area_norm']=norm_area 
-        if approx_vol_col==True:
-            vol_estimate=[(df.loc[df.Cell_ID==cell_id, 'cell_area_pxl'].values[i]*df.loc[df.Cell_ID==cell_id, 'minor_axis_length'].values[i])*(cam_pxl_size**2)*(zstepsize) for i in range(len(cell_rows))]
-            df.loc[df.Cell_ID==cell_id, 'approx_vol']=vol_estimate 
-            vol_estimate_norm=vol_estimate/np.max(vol_estimate)
-            df.loc[df.Cell_ID==cell_id, 'approx_vol_norm']=vol_estimate_norm
-
-    # output_name=Path(acdc_path).stem + '_pp.csv'
-    # output_path=Path(acdc_path).parent/f"{output_name}"
-    # df.to_csv(output_path, index=False)
-    return df
 
 # %% cc sort 
 def cc_sort(acdc_path: str) -> (pd.DataFrame, pd.DataFrame):
@@ -281,6 +288,7 @@ def cc_lengths(cell_path: str, camsamprate: int=5):
     g1_df,s_df=cc_sort(cell_path)
     cdf=pd.concat([g1_df, s_df])
     g1_lens, s_lens, cc_lens =[],[],[]
+    ratios=[]
     ind=0
     for cell_id in np.unique(cdf.loc[cdf.relationship=='mother','Cell_ID'].values): #for each G1 mother
         cell_rows=cdf.loc[cdf.Cell_ID==cell_id].copy()
@@ -308,7 +316,7 @@ def cc_lengths(cell_path: str, camsamprate: int=5):
             cc_lens.append(lens[2]+lens[3])
             cc_lens.append(lens[4]+lens[5])
 
-    return np.array(g1_lens)*camsamprate, np.array(s_lens)*camsamprate, np.array(cc_lens)*camsamprate
+    return np.array(g1_lens)*camsamprate, np.array(s_lens)*camsamprate, np.array(cc_lens)*camsamprate, ratios
 
 # %% full cc transition indices
 def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
@@ -330,7 +338,7 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
         if num_transitions<3:
             g1_df=g1_df.drop(cell_rows.index)
         else:
-            fullcc+=(num_transitions//3)
+            fullcc+=(num_transitions//4)
             checkpoint_frame=0
             for i in range(num_transitions):
                 if i==0:
@@ -340,7 +348,10 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
                         checkpoint_frame = lens[0]
                     column_name='Start_Index_1'
                 else:
-                    checkpoint_frame=checkpoint_frame+lens[i]
+                    if cell_rows['relationship'].values[0]=='bud':
+                        checkpoint_frame=checkpoint_frame+lens[i-1]
+                    else: #for mothers
+                        checkpoint_frame=checkpoint_frame+lens[i]
                 
                     if i%2==0:
                         column_name='Start_Index_'+str(int(i/2 + 1))
@@ -372,19 +383,165 @@ def find_full_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
                 column_vals=[(cell_rows['frame_i'].values[j]-checkpoint_frame) for j in range(len(cell_rows))]
                 s_df.loc[s_df.Cell_ID==cell_id, column_name]=column_vals
 
-    print(f"# cells with full cell cycles = {fullcc}")
+    print(f"# full cell cycles = {fullcc}")
 
     # return g1_df, s_df
     return pd.concat([g1_df, s_df], ignore_index=True)
 
+# %% calc cc lengths, position, and phase metrics
+def calc_ccmetrics(cell_path: str, save_csv: bool=False, cam_samprate: int=5, con_samprate: int=60):
+    """
+    Args: Cell-ACDC Output csv path, other args.
+    Outputs: Dictionary containing selected cc metric info.
+    """
+    cdfs=[]
+    dds,bbs=[],[]
+    # for cell_path in cell_dfpaths:
+        # celldf=pd.read_csv(cell_path)
+    # cell_path=cell_dfpaths[0]
+    g1df_sort, sdf_sort = cc_sort(cell_path)
+    celldf = find_full_transitions(g1df_sort, sdf_sort)
+    path_parts=Path(cell_path).stem.split("_")
+    date=path_parts[1]
+    fov=path_parts[4]
+
+    for cell_id in np.unique(celldf['Cell_ID'].values):
+        cell_rows=celldf.loc[celldf.Cell_ID==cell_id]
+        cell_metrics={
+            "Cell_ID"           : [cell_id],
+            "date"              : [date], 
+            "fov"               : [fov]
+        }
+
+        start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i']
+        if start_1.empty==False:
+            start_1_frame=start_1.values[0]
+        div_1_frame=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
+        div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i']
+        if div_2.empty==False:
+            div_2_frame=div_2.values[0]
+        start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i']
+        if start_2.empty==False: #for use with cells that fully pass Start_1 to Start_2 but not Div_2
+            start_2_frame=start_2.values[0]
+        div_3=cell_rows.loc[cell_rows.Div_Index_3==0, 'frame_i']
+        if div_3.empty==False:
+            div_3_frame=div_3.values[0]
+        start_3=cell_rows.loc[cell_rows.Start_Index_3==0, 'frame_i']
+        if start_3.empty==False: 
+            start_3_frame=start_3.values[0]
+        # div_4=cell_rows.loc[cell_rows.Div_Index_4==0, 'frame_i']
+        # if div_4.empty==False:
+        #     div_4_frame=div_4.values[0]
+
+        min_frame=ceildiv(np.min(cell_rows['time_minutes'].values), con_samprate)
+        max_frame=ceildiv(np.max(cell_rows['time_minutes'].values), con_samprate)
+        for frame in np.arange(min_frame, max_frame, 1):
+            abs_time=int(frame*con_samprate)
+            cell_frames=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'frame_i']
+            if cell_frames.empty==False: #if cell existed at conf timepoint
+                relationship=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relationship'].values[0]
+                approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
+                cell_frame=cell_frames.values[0]
+                g1_ratio= -100000 #dummy assign
+                s_ratio=  -100000
+
+                if div_2.empty==False and cell_frame<=div_1_frame:
+                    cc_length = (div_2_frame - div_1_frame) * cam_samprate
+                    if (div_1_frame-cell_frame)<cc_length: #if w/in one cc before div_1 
+                        frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length)  
+                        frac_time = 1 - (np.abs(frac_time) % 1)
+                        if start_1_frame<div_1_frame:
+                            g1_ratio=(start_2_frame - div_1_frame)*cam_samprate/cc_length
+                            s_ratio= (div_2_frame - start_2_frame)*cam_samprate/cc_length
+                        else:
+                            g1_ratio=(start_1_frame - div_1_frame)*cam_samprate/cc_length
+                            s_ratio= (div_2_frame - start_1_frame)*cam_samprate/cc_length
+                        if relationship=='bud':
+                            cc_num=0
+                        else:
+                            cc_num=0   
+                    else:
+                        continue
+                # elif div_2.empty==True:
+                #     cc_length = (start_2_frame - start_1_frame) * cam_samprate
+                #     frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length) 
+                #     if -1<frac_time<0:
+                #         frac_time = 1 - (np.abs(frac_time) % 1)
+                #     elif 1<frac_time<(start_2_frame+(start_2_frame - start_1_frame)):
+                #         frac_time = frac_time % 1
+                #     elif frac_time<-1 or frac_time>(start_2_frame+(start_2_frame - start_1_frame)):
+                #         continue
+                #     cc_num=1  
+                    # bbs.append(cc_length)
+                elif div_2.empty==False and div_1_frame<cell_frame<=div_2_frame:
+                    cc_length = (div_2_frame - div_1_frame) * cam_samprate
+                    frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length)  
+                    if start_1_frame>div_1_frame:
+                        g1_ratio=(start_1_frame - div_1_frame)*cam_samprate/cc_length
+                        s_ratio= (div_2_frame - start_1_frame)*cam_samprate/cc_length
+                    else:
+                        g1_ratio=(start_2_frame - div_1_frame)*cam_samprate/cc_length
+                        s_ratio= (div_2_frame - start_2_frame)*cam_samprate/cc_length
+                    cc_num=1
+                elif div_3.empty==False and div_2_frame<cell_frame<=div_3_frame:
+                    cc_length = (div_3_frame - div_2_frame) * cam_samprate
+                    frac_time = (abs_time - (div_2_frame * cam_samprate)) / (cc_length)
+                    if start_2.empty==False and start_2_frame>div_2_frame:
+                        g1_ratio=(start_2_frame - div_2_frame)*cam_samprate/cc_length
+                        s_ratio= (div_3_frame - start_2_frame)*cam_samprate/cc_length
+                    else:
+                        g1_ratio=(start_3_frame - div_2_frame)*cam_samprate/cc_length
+                        s_ratio= (div_3_frame - start_3_frame)*cam_samprate/cc_length
+                    cc_num=2
+                # elif div_4.empty==False and div_3_frame<cell_frame<=div_4_frame:
+                #     cc_length = (div_4_frame - div_3_frame) * cam_samprate
+                #     frac_time = (abs_time - (div_3_frame * cam_samprate)) / (cc_length)
+                #     cc_num=3
+                # elif div_4.empty==False and cell_frame>div_4_frame:
+                #     cc_length = (div_4_frame - div_3_frame) * cam_samprate
+                #     frac_time = (abs_time - (div_3_frame * cam_samprate)) / (cc_length)
+                #     frac_time = frac_time % 1
+                #     cc_num=4
+                else:
+                    continue
+                real_time = frac_time * cc_length
+
+                more_cell_metrics={                        
+                    "relationship"     : [relationship],
+                    "abs_time"         : [abs_time],
+                    "frac_time"        : [frac_time],
+                    "cc_length"        : [cc_length],
+                    "real_time"        : [real_time],
+                    "cc_num"           : [cc_num],
+                    "approx_vol"       : [approx_vol],
+                    "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
+                    "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
+                    "g1_ratio"         : [g1_ratio],
+                    "s_ratio"          : [s_ratio]
+                    }
+                results=cell_metrics | more_cell_metrics
+                cdfs.append(pd.DataFrame(results))
+                
+        if len(cdfs)>0:
+            out_df=pd.concat(cdfs, ignore_index=True)
+
+    #somewhat arbitrary cutoffs, but based upon normal grow periods and cc length distributions.
+    # excl_indices=out_df.loc[(out_df.cc_length<75) | (out_df.cc_length>180)].index 
+    # if excl_indices.empty==False:
+    #     out_df=out_df.drop(excl_indices)
+    out_df.sort_values(by=["frac_time", "Cell_ID"], inplace=True, ignore_index=True)
+
+    if save_csv==True:
+        out_df.to_csv(Path(expmt_path+'\cc_measure')/f"orgdf_{meta['date']}.csv",index=False)
+    return out_df
 # %% full cc organelle analysis
 def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, cam_samprate: int=5, con_samprate: int=60):
     """
     Args: List of paths to raw acdc csvs and organelle measure csvs.
     Outputs: One df containing geometric cell, cell cycle, and organelle information. Option to save to csv file.
     """
-
     cdfs=[]
+    dds,bbs=[],[]
     # for cell_path in cell_dfpaths:
         # celldf=pd.read_csv(cell_path)
     cell_path=cell_dfpaths[0]
@@ -404,24 +561,24 @@ def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, 
 
         start_1_frame=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0] #for use in filtering negative time frac buds
         div_1_frame=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
-        
         div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i']
         if div_2.empty==False:
-            div_2_frame=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0]
-        else: #for those cells that fully pass Start_1 to Start_2 but not Div_2
-            start_2_frame=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i'].values[0]
-            
+            div_2_frame=div_2.values[0]
+        start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i']
+        if start_2.empty==False: #for use with cells that fully pass Start_1 to Start_2 but not Div_2
+            start_2_frame=start_2.values[0]
         div_3=cell_rows.loc[cell_rows.Div_Index_3==0, 'frame_i']
         if div_3.empty==False:
-            div_3_frame=cell_rows.loc[cell_rows.Div_Index_3==0, 'frame_i'].values[0]
-        
+            div_3_frame=div_3.values[0]
+        start_3=cell_rows.loc[cell_rows.Start_Index_3==0, 'frame_i']
+        if start_3.empty==False: 
+            start_3_frame=start_3.values[0]
         div_4=cell_rows.loc[cell_rows.Div_Index_4==0, 'frame_i']
         if div_4.empty==False:
-            div_4_frame=cell_rows.loc[cell_rows.Div_Index_4==0, 'frame_i'].values[0]
+            div_4_frame=div_4.values[0]
 
         min_frame=ceildiv(np.min(cell_rows['time_minutes'].values), con_samprate)
         max_frame=ceildiv(np.max(cell_rows['time_minutes'].values), con_samprate)
-        # for frame in np.arange(np.min(cell_rows['time_minutes'].values)//con_samprate,np.max(cell_rows['time_minutes'].values)//con_samprate+1, 1):
         for frame in np.arange(min_frame, max_frame, 1):
             abs_time=int(frame*con_samprate)
             cell_frames=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'frame_i']
@@ -429,39 +586,67 @@ def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, 
                 relationship=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relationship'].values[0]
                 approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
                 cell_frame=cell_frames.values[0]
+                g1_ratio= -1 #dummy assign
+                s_ratio=  -1
 
-                if div_2.empty==False and cell_frame<div_2_frame:
+                if div_2.empty==False and cell_frame<=div_1_frame:
+                    cc_length = (div_2_frame - div_1_frame) * cam_samprate
+                    if (div_1_frame-cell_frame)<cc_length: #if w/in one cc before div_1 
+                        frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length)  
+                        frac_time = 1 - (np.abs(frac_time) % 1)
+                        if start_1_frame<div_1_frame:
+                            g1_ratio=(start_2_frame - div_1_frame)*cam_samprate/cc_length
+                            s_ratio= (div_2_frame - start_2_frame)*cam_samprate/cc_length
+                        else:
+                            g1_ratio=(start_1_frame - div_1_frame)*cam_samprate/cc_length
+                            s_ratio= (div_2_frame - start_1_frame)*cam_samprate/cc_length
+                        if relationship=='bud':
+                            cc_num=0
+                        else:
+                            cc_num=0
+                        
+                    else:
+                        continue
+                # elif div_2.empty==True:
+                #     cc_length = (start_2_frame - start_1_frame) * cam_samprate
+                #     frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length) 
+                #     if -1<frac_time<0:
+                #         frac_time = 1 - (np.abs(frac_time) % 1)
+                #     elif 1<frac_time<(start_2_frame+(start_2_frame - start_1_frame)):
+                #         frac_time = frac_time % 1
+                #     elif frac_time<-1 or frac_time>(start_2_frame+(start_2_frame - start_1_frame)):
+                #         continue
+                #     cc_num=1  
+                    # bbs.append(cc_length)
+                elif div_2.empty==False and div_1_frame<cell_frame<=div_2_frame:
                     cc_length = (div_2_frame - div_1_frame) * cam_samprate
                     frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length)  
-                    if -1<frac_time<0:
-                        frac_time = 1 - (np.abs(frac_time) % 1)
-                        # if relationship=='mother':
-                        #     frac_time = 1 - (np.abs(frac_time) % 1)
-                        # elif relationship=='bud' and cell_frame>start_1_frame: ###need to exclude buds that have negative frac time near -1:
-                        #     frac_time = 1 - (np.abs(frac_time) % 1)
-                        # else:
-                        #     continue
-                    generation_num=1 
-                    elif frac_time<-1:
-                        continue
-                elif div_2.empty==True:
-                    cc_length = (start_2_frame - start_1_frame) * cam_samprate
-                    frac_time = (abs_time - (div_1_frame * cam_samprate)) / (cc_length) 
-                    if -1<frac_time<0:
-                        frac_time = 1 - (np.abs(frac_time) % 1)
-                    elif 1<frac_time<(start_2_frame+(start_2_frame - start_1_frame)):
-                        frac_time = frac_time % 1
-                    elif frac_time<-1 or frac_time>(start_2_frame+(start_2_frame - start_1_frame)):
-                        continue
-                    generation_num=1  
-                elif div_3.empty==False and cell_frame<div_3_frame:
+                    if start_1_frame>div_1_frame:
+                        g1_ratio=(start_1_frame - div_1_frame)*cam_samprate/cc_length
+                        s_ratio= (div_2_frame - start_1_frame)*cam_samprate/cc_length
+                    else:
+                        g1_ratio=(start_2_frame - div_1_frame)*cam_samprate/cc_length
+                        s_ratio= (div_2_frame - start_2_frame)*cam_samprate/cc_length
+                    cc_num=1
+                elif div_3.empty==False and div_2_frame<cell_frame<=div_3_frame:
                     cc_length = (div_3_frame - div_2_frame) * cam_samprate
                     frac_time = (abs_time - (div_2_frame * cam_samprate)) / (cc_length)
-                    generation_num=2
-                elif div_4.empty==False and cell_frame<div_4_frame:
+                    if start_2.empty==False and start_2_frame>div_2_frame:
+                        g1_ratio=(start_2_frame - div_2_frame)*cam_samprate/cc_length
+                        s_ratio= (div_3_frame - start_2_frame)*cam_samprate/cc_length
+                    else:
+                        g1_ratio=(start_3_frame - div_2_frame)*cam_samprate/cc_length
+                        s_ratio= (div_3_frame - start_3_frame)*cam_samprate/cc_length
+                    cc_num=2
+                elif div_4.empty==False and div_3_frame<cell_frame<=div_4_frame:
                     cc_length = (div_4_frame - div_3_frame) * cam_samprate
                     frac_time = (abs_time - (div_3_frame * cam_samprate)) / (cc_length)
-                    generation_num=3
+                    cc_num=3
+                elif div_4.empty==False and cell_frame>div_4_frame:
+                    cc_length = (div_4_frame - div_3_frame) * cam_samprate
+                    frac_time = (abs_time - (div_3_frame * cam_samprate)) / (cc_length)
+                    frac_time = frac_time % 1
+                    cc_num=4
                 else:
                     continue
                 real_time = frac_time * cc_length
@@ -472,10 +657,12 @@ def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, 
                     "frac_time"        : [frac_time],
                     "cc_length"        : [cc_length],
                     "real_time"        : [real_time],
-                    "generation"       : [generation_num],
+                    "cc_num"           : [cc_num],
                     "approx_vol"       : [approx_vol],
                     "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
                     "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
+                    "g1_ratio"         : [g1_ratio],
+                    "s_ratio"          : [s_ratio]
                     }
                 results=cell_metrics | more_cell_metrics
 
@@ -483,42 +670,48 @@ def analyze_fullcc(cell_dfpaths: list, org_dfpaths: list, save_csv: bool=False, 
                     orgdf=pd.read_csv(org_path)
                     org_rows=orgdf.loc[orgdf.idx_cell==cell_id].loc[orgdf.abs_time==abs_time]
                     org_vox=org_rows['volume-pixel'].dropna().values #drop any NaNs
-                    if len(org_vox)>0: #if org measurement exists at this time
-                        meta=parse_meta_orgmeasure(org_path.stem)
-                        org_label=meta['organelle']
-                        org_frame=org_rows.loc[org_rows.abs_time==abs_time]
-                        org_count=len(org_frame['idx-orga'].values)
-                    
-                        if len(org_vox)>1:
-                            org_vox_tot=np.sum(org_vox)
-                        else:
-                            org_vox_tot=org_vox[0]
-                        org_vol_frac=(org_vox_tot*(cam_pxl_size**2)*(zstepsize)) / approx_vol
-
-                        if org_label=='vo':
-                            eccentricity=org_rows['eccentricity'].values[0]
-                        else:
-                            eccentricity=0
-                        org_metrics={
-                            org_label+"_vol"   : [org_vox_tot],
-                            org_label+"_frac"  : [org_vol_frac],
-                            org_label+"_count" : [org_count],
-                            org_label+"_ecc"   : [eccentricity]
-                            }
-                    
-                        results = results | org_metrics
+                    # if len(org_vox)>0: #if org measurement exists at this time
+                    meta=parse_meta_orgmeasure(org_path.stem)
+                    org_label=meta['organelle']
+                    org_frame=org_rows.loc[org_rows.abs_time==abs_time]
+                    org_count=len(org_frame['idx-orga'].values)
+                    if len(org_vox)==0:
+                        org_vox_tot=0
+                    elif len(org_vox)==1:
+                        org_vox_tot=org_vox[0]
                     else:
-                        continue
+                        org_vox_tot=np.sum(org_vox)
+                    org_vol_frac=(org_vox_tot*(cam_pxl_size**2)*(zstepsize)) / approx_vol
+
+                    if org_label=='vo' and len(org_vox)>0:
+                        eccentricity=org_rows['eccentricity'].values[0]
+                    else:
+                        eccentricity=0
+                    org_metrics={
+                        org_label+"_vol"   : [org_vox_tot],
+                        org_label+"_frac"  : [org_vol_frac],
+                        org_label+"_count" : [org_count],
+                        org_label+"_ecc"   : [eccentricity]
+                        }
+                
+                    results = results | org_metrics
+                    # else:
+                    #     continue
                 cdfs.append(pd.DataFrame(results))
                 
         if len(cdfs)>0:
             out_df=pd.concat(cdfs, ignore_index=True)
-    
+
+    #somewhat arbitrary cutoffs, but based upon normal grow periods and cc length distributions.
+    excl_indices=out_df.loc[(out_df.cc_length<75) | (out_df.cc_length>180)].index 
+    if excl_indices.empty==False:
+        out_df=out_df.drop(excl_indices)
     out_df.sort_values(by=["frac_time", "Cell_ID"], inplace=True, ignore_index=True)
 
     if save_csv==True:
         out_df.to_csv(Path(expmt_path+'\cc_measure')/f"orgdf_{meta['date']}.csv",index=False)
     return out_df
+    # return bbs, dds
 
 # %% plot full cc org dynamics
 def extract_frame_metrics(cellrows: pd.DataFrame, org: str, metric: str):
@@ -580,23 +773,47 @@ def plot_fullcc(org_df: pd.DataFrame, org_label: str, xl: float=-.5, xr: float=1
     fig.tight_layout()
     print(f"{org} n: {tally} data points")
     return
-# %% Bin full org dynamics
-def plot_fullccbin(org_df: pd.DataFrame, org_label: str, binwidth: int=.05, ms: int=5):
-    '''
+# %% Binned full cc org dynamics
+def fullccbin(org_df: pd.DataFrame, org: str, binwidth: float):
+    """
+    Args: One df containing both G1 or S/G2/M info, binwidth in fractional units
+    Outputs: Two output arrays containing [frac_time, org_vox, bin_std] for mother and daughter respectively.
+    """
+    bin_edges=np.linspace(np.min([min(org_df['frac_time'].values),0]), np.max([max(org_df['frac_time'].values),1]), int(1//binwidth))
+    mom_arr, bud_arr=[],[]
+    for i in range(len(bin_edges)-1):
+        l_bound, r_bound = bin_edges[i], bin_edges[i+1]
+        fracbin_rows=org_df.loc[(org_df.frac_time>=l_bound) & (org_df.frac_time<=r_bound)]
+        mom_rows=fracbin_rows.loc[fracbin_rows.relationship=="mother"]
+        bud_rows=fracbin_rows.loc[fracbin_rows.relationship=="bud"]
+        frac_time=(l_bound+r_bound)/2
+
+        m_arr=mom_rows[org+'_vol'].dropna().values #Drop NaNs from stats
+        if len(m_arr)>0:
+            mom_arr.append([frac_time, np.mean(m_arr), np.std(m_arr)])
+        m_arr=bud_rows[org+'_vol'].dropna().values
+        if len(m_arr)>0:
+            bud_arr.append([frac_time, np.mean(m_arr), np.std(m_arr)])
+
+    return np.array(mom_arr), np.array(bud_arr)
+# %% plot binned full cc org dynamics
+def plot_fullccbin(org_df: pd.DataFrame, org: str, bin_text: bool=False, binwidth: int=.05, ms: int=5):
+    """
     Args: One df containing both G1 or S/G2/M info, organelle label, ARG ABOUT BIN WIDTH OR RAW VS FRAC TIME
     Outputs: Plots of binned org metric vs cc position.
-    '''
-    #MAYBE ADD GENERATION AND/OR DATE COLOR CODE INTO HERE
+    """
+    #MAYBE ADD cc_num AND/OR DATE COLOR CODE INTO HERE
     #bin frac or real times by 5-10%, avg, plot error scatter
 
-    if org_label=='vo':
+    if org=='vo':
         metrics=['frac', 'vol', 'ecc']
     else:
         metrics=['frac', 'vol', 'count']
 
     fig,axes=plt.subplots(nrows=2,ncols=len(metrics))
-    bin_edges=np.linspace(0, np.max([max(org_df['frac_time'].values),1]), int(1//binwidth))
+    bin_edges=np.linspace(np.min([min(org_df['frac_time'].values),0]), np.max([max(org_df['frac_time'].values),1]), int(1//binwidth))
     tally=0
+    out_arr=[]
     for i in range(len(bin_edges)-1):
         l_bound, r_bound = bin_edges[i], bin_edges[i+1]
         fracbin_rows=org_df.loc[(org_df.frac_time>=l_bound) & (org_df.frac_time<=r_bound)]
@@ -608,17 +825,20 @@ def plot_fullccbin(org_df: pd.DataFrame, org_label: str, binwidth: int=.05, ms: 
             m_arr=mom_rows[org+'_'+metrics[j]].dropna().values #Drop NaNs from stats
             if len(m_arr)>0:
                 axes[0,j].errorbar(frac_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='b',marker='o',ms=ms)
-                axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")            
+                out_arr.append([frac_time, np.mean(m_arr), np.std(m_arr)])
+                if bin_text==True:
+                    axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")            
                 if j==1:
                     tally+=int(len(m_arr))
             m_arr=bud_rows[org+'_'+metrics[j]].dropna().values
             if len(m_arr)>0:
                 axes[0,j].errorbar(frac_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='r',marker='s',ms=ms)
-                axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+                if bin_text==True:
+                    axes[0,j].text(frac_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
                 if j==1:
                     tally+=int(len(m_arr))
 
-    bin_edges=np.linspace(0, max(org_df['cc_length'].values), int(1//(binwidth)))
+    bin_edges=np.linspace(np.min([min(org_df['frac_time'].values), 0]), max(org_df['cc_length'].values), int(1//(binwidth)))
     for i in range(len(bin_edges)-1):
         l_bound, r_bound = bin_edges[i], bin_edges[i+1]
         realbin_rows=org_df.loc[(org_df.real_time>=l_bound) & (org_df.real_time<=r_bound)]
@@ -630,20 +850,22 @@ def plot_fullccbin(org_df: pd.DataFrame, org_label: str, binwidth: int=.05, ms: 
             m_arr=mom_rows[org+'_'+metrics[j]].dropna().values #Drop NaNs from stats
             if len(m_arr)>0:
                 axes[1,j].errorbar(real_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='b',marker='o',ms=ms)
-                axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+                if bin_text==True:
+                    axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
             m_arr=bud_rows[org+'_'+metrics[j]].dropna().values
             if len(m_arr)>0:
                 axes[1,j].errorbar(real_time, np.mean(m_arr), yerr=np.std(m_arr), xerr=0, ls='none', c='r',marker='s',ms=ms)
-                axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
+                if bin_text==True:
+                    axes[1,j].text(real_time, np.mean(m_arr)*1.25, int(len(m_arr)), ha="center", fontsize="small")
 
     for j in range(len(metrics)):
         axes[0,j].set_xlabel('Normalized CC \n Position (Div to Div)')
         axes[1,j].set_xlabel('Time Relative \n to Previous Division (min)')
-        axes[0,j].set_title(f"Binned {org_label} {metrics[j]} \n vs CC position")
+        axes[0,j].set_title(f"Binned {org} {metrics[j]} \n vs CC position")
     fig.tight_layout()
 
     print(f"Number of {org} data points in binned graphs: {tally}")
-    return 
+    return np.array(out_arr)
 # %% ALL cc transition indices
 def find_all_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
     """
@@ -737,7 +959,7 @@ def find_all_transitions(g1_df: pd.DataFrame, s_df: pd.DataFrame):
             s_df.loc[s_df.Cell_ID==cell_id, 'Div_Index_2']=div_index_2
 
     print('# full cell cycles = '+str(fullcc))
-    return g1_df, s_df
+    return pd.concat([g1_df, s_df])
 
 #%% ALL cc organelle analysis
 def cc_org_analysis(cell_dfpaths: list, pre_org_dfpaths: list, vol_frac=False) -> (pd.DataFrame,pd.DataFrame):
@@ -750,7 +972,7 @@ def cc_org_analysis(cell_dfpaths: list, pre_org_dfpaths: list, vol_frac=False) -
     for i in range(len(cell_dfpaths)):
         g1_df,s_df=cc_sort(cell_dfpaths[i]) #prelim sort and process
         
-        g1_moms, s_moms, g1_buds, s_buds = find_all_transitions(g1_df, s_df) #find annotated cc transitions
+        ###############g1_moms, s_moms, g1_buds, s_buds = find_all_transitions(g1_df, s_df) #find annotated cc transitions
         path_parts=cell_dfpaths[i].stem.split("_")
         date=path_parts[1]
         fov=path_parts[4]
@@ -1068,7 +1290,7 @@ def plot_ccorg(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame, save_fig=False, 
             plt.savefig(Path(expmt_path+'/cc_measure')/f"{org_label}_cc-analysis.png")
     return None
 
-# %% Bin organelle measurements by cc postion
+# %% Plot binned all cc org dynamics
 def binned_org(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame,plot_graph: bool=True,ms=3):
     """
     Args: Dataframes of extracted cell and organelle metrics for each cc group. Option to plot.
@@ -1189,14 +1411,8 @@ def binned_org(g1_org_df: pd.DataFrame, s_org_df: pd.DataFrame,plot_graph: bool=
     # return g1_out,s_out
     return
 
-# %% cc size analysis
-# def plot_cc_scatter(df: pd.DataFrame, axis: int, org_label: str):
-#     fig,axes=plt.subplots(nrows=1,ncols=2)
-
-#     axes[axis].scatter(offset,vol_frac,c='m',marker='o') #scatter of organelle volume fraction versus relative frame index
-#     axes[axis].errorbar(offset, vol_frac, yerr=org_err[org_label]*vol_frac, c='m',marker='o')
-
-def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
+# %% plot cc sizes about transition ref points
+def plot_ccsize(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
     """
     Args: Path to cell metric csv file.
     Outputs: Graph displaying cell size profiles vs cell cycle position.
@@ -1243,20 +1459,130 @@ def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
 # %% Run full cc org analysis
 # odf=analyze_fullcc(np.unique(list_cell), list_in)
 # for org in orgs:
-#     plot_fullcc(odf,org)
+#     #plot_fullcc(odf,org)
 #     plot_fullccbin(odf, org)
-
+# %% Plot cc lengths from analyze_fullcc() output
 # plt.figure()
-# n,b,p=plt.hist(odf['cc_length'].values, bins='auto',edgecolor='black')
+# date=odf['date'].values[0]
+# # n,b,p=plt.hist(odf['cc_length'].values, bins='auto',edgecolor='black')
+# n,b,p=plt.hist(odf.loc[odf.cc_num==1, 'cc_length'].values, bins='auto', color='b',alpha=0.75,edgecolor='black', label=f"CC #1")
+# n,b,p=plt.hist(odf.loc[odf.cc_num==2, 'cc_length'].values, bins='auto', color='y',alpha=0.75,edgecolor='black', label=f"CC #2")
 # plt.xlabel('Time (min)')
 # plt.ylabel('Number of Cell Cycles')
-# plt.title('Raw CC Lengths for 08132026')
+# plt.title(f"Raw CC Lengths by CC No. for {date}")
+# plt.legend(loc='best')
 
+# %% Plot org metric vs cc position with cc length as color gradient
+# fig,axes=plt.subplots(nrows=1,ncols=1)
+# metrics=['count']
+# org_label='ld'
+# ms=5
+# for cell in np.unique(odf['Cell_ID'].values):
+#     cell_rows=odf.loc[odf.Cell_ID==cell]
+#     date=cell_rows["date"].values[0]
+#     mom_rows=cell_rows.loc[cell_rows.relationship=="mother"]
+#     bud_rows=cell_rows.loc[cell_rows.relationship=="bud"]
+#     frac_times, real_times, m_arr = extract_frame_metrics(mom_rows, org_label, metrics[0])
+#     if len(m_arr)>0:
+#         grad=m_arr
+#         axes.scatter(frac_times, m_arr,s=5, c=grad,marker='o', cmap='Greys', edgecolors='k')
+#     frac_times, real_times, m_arr = extract_frame_metrics(bud_rows, org_label, metrics[0])
+#     if len(m_arr)>0:
+#         grad=m_arr
+#         mapp=axes.scatter(frac_times, m_arr,s=5, c=grad,marker='v', cmap='Greys', edgecolors='k')
+# axes.set_xlabel('Normalized CC \n Position (Div to Div)')
+# axes.set_ylabel(f"{org_label} {metrics[0]}")
+# fig.colorbar(mapp,label='CC Length')
+# https://matplotlib.org/stable/users/explain/colors/colorbar_only.html
+
+# %% Calc and plot diffs between concurrent cell cycles for each cell.
+# diffs, cc1, cc2=[],[],[]
+# date=odf['date'].values[0]
+# for cell_id in np.unique(odf['Cell_ID'].values):
+#     cell_rows=odf.loc[odf.Cell_ID==cell_id]
+#     cc_1=cell_rows.loc[cell_rows.cc_num==1, 'cc_length']
+#     cc_2=cell_rows.loc[cell_rows.cc_num==2, 'cc_length']
+#     if cc_2.empty==False and cc_1.empty==False:
+        # cc1.append(cc_1.values[0])
+        # cc2.append(cc_2.values[0])
+#         diffs.append(cc_2.values[0]-cc_1.values[0])
+# fig,axes=plt.subplots(nrows=1,ncols=2)
+# axes[0].hist(diffs, bins='auto',edgecolor='black')
+# axes[0].set_xlabel('Time (min)')
+# axes[0].set_ylabel('CC_2 - CC_1 (min)')
+# axes[1].scatter(cc1, cc2)
+# axes[1].set_xlabel('CC 1 (min)')
+# axes[1].set_ylabel('CC 2 (min)')
+# fig.suptitle(f"CC Differences by CC Num for {date}")
+# fig.tight_layout()
+
+# %% Extract and plot phase comparisons.
+# undf=odf.drop_duplicates(subset=['Cell_ID', 'cc_length']) #drops if both column entries same
+# undf=undf.drop(undf[undf.g1_ratio<-100].index | undf[undf.s_ratio<-100].index)
+## Plot G1 vs Total CC length scatter
+# plt.figure()
+# shapes=['o','s','v']
+# colors=['m','r','k']
+# for cc in range(max(undf['cc_num'].values)+1):
+#     g1s=undf.loc[undf.cc_num==cc,'g1_ratio'].values
+#     ccs=undf.loc[undf.cc_num==cc,'cc_length'].values
+#     plt.scatter(ccs,g1s, c=colors[cc], s=20, marker=shapes[cc], label=f"cc {cc}, n ={len(g1s)}")
+# plt.xlabel('Total CC Length')
+# plt.ylabel('G1 Phase Ratio')
+# plt.title(f"{undf['date'].values[0]}")
+# plt.legend(loc='best')
+# plt.ylim(0,1)
+## Plot G1 vs Total CC length scatter BINNED
+# plt.figure()
+# shapes=['o','s','v']
+# colors=['m','r','k']
+# for cc in range(max(undf['cc_num'].values)+1):
+#     cc_rows=undf.loc[undf.cc_num==cc]
+#     cc_lengths=cc_rows['cc_length'].values
+#     for cc_length in np.unique(np.sort(cc_lengths)):
+#         g1s=cc_rows.loc[cc_rows.cc_length==cc_length,'g1_ratio'].values
+#         plt.errorbar(cc_length,np.mean(g1s),np.std(g1s),c=colors[cc], ms=10, marker=shapes[cc])
+#         # plt.text(cc_length, np.mean(g1s)*1.15, int(len(g1s)), ha="center", fontsize="large")
+# plt.xlabel('Total CC Length')
+# plt.ylabel('G1 Phase Ratio')
+# plt.title(f"{undf['date'].values[0]}")
+# plt.ylim(0,1)
+# cc0 = mpatches.Patch(color=colors[0], label="cc 0")
+# cc1 = mpatches.Patch(color=colors[1], label="cc 1")
+# cc2 = mpatches.Patch(color=colors[2], label="cc 2")
+# plt.legend(handles=[cc0, cc1, cc2], loc='best')
+## Plot G1 vs S/G2/M phase scatter
+# plt.figure()
+# shapes=['o','s','v']
+# colors=['m','r','k']
+# for cc in range(max(undf['cc_num'].values)+1):
+#     g1s=undf.loc[undf.cc_num==cc,'g1_ratio'].values
+#     ss=undf.loc[undf.cc_num==cc,'s_ratio'].values
+#     plt.scatter(g1s, ss, c=colors[cc], s=10, marker=shapes[cc], label=f"cc {cc}, n ={len(ss)}")
+# plt.ylabel('S/G2/M Phase Ratio')
+# plt.xlabel('G1 Phase Ratio')
+# plt.title(f"{undf['date'].values[0]}")
+# plt.legend(loc='best')
+# plt.xlim(0,1)
+# plt.ylim(0,1)
+## Plot Individual cc phases histogram 
+# plt.figure()
+# shapes=['o','s','v']
+# colors=['m','y','k']
+# for cc in range(max(undf['cc_num'].values)+1):
+#     g1s=undf.loc[undf.cc_num==cc,'g1_ratio'].values
+#     ss=undf.loc[undf.cc_num==cc,'s_ratio'].values
+#     n,b,p=plt.hist(g1s, bins=np.arange(0,1,0.05), density=True, alpha=0.75, color=colors[cc],edgecolor='black', label=f"cc {cc} G1 n={len(g1s)}")
+#     # n,b,p=plt.hist(ss, bins='auto', alpha=0.75, color=colors[cc], edgecolor='black', label=f"cc {cc} S/G2/M n={len(ss)}")
+# plt.ylabel('Prob Density')
+# plt.xlabel('Ratio to CC Length')
+# plt.title(f"{undf['date'].values[0]}")
+# plt.legend(loc='best')
 # %% Run cc lengths
 # cpaths=[list_cell[0], r'C:\Users\jglic\Downloads\07152026 3c-ey2795\cell_measure\BF-timelapse_acdc_output_07152026_cpsam-d25-ms20.csv']
 # g_lens,s_lens,lens_l=[],[],[]
 # for i in range(len(cpaths)):
-#     gl,sl,lens_dist=cc_lengths(cpaths[i])
+#     gl,sl,lens_dist, _=cc_lengths(cpaths[i])
 #     g_lens.append(gl)
 #     s_lens.append(sl)
 #     lens_l.append(lens_dist)
@@ -1264,6 +1590,7 @@ def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
 # s_arr=np.concatenate(s_lens)
 # l_arr=np.concatenate(lens_l)
 
+# %% Plot cc phase and total lengths 
 # plt.figure()
 # plt.xlabel("Time (min)")
 # plt.title('Mother Cell CC Phase Annotation Lengths')
@@ -1272,152 +1599,206 @@ def cc_size(cell_dfpath: str, norm_size: bool=False, xbound: int=30):
 # n1,b1,p1=plt.hist(g_arr, bins='auto', alpha=0.75, edgecolor='black', color='y', label='G1 Phase n=('+f'{len(g_arr)})')
 # n2,b2,p2=plt.hist(l_arr, bins='auto', alpha=0.75, edgecolor='black', color='k', label='Total CC n=('+f'{len(l_arr)})')
 # plt.legend()
-# %%
-    # # ms, md=start_arr, div_arr
-    # # fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-    # plt.figure()
-    # plt.xlabel('Time min')
-    # plt.title('Relative difference between myo1 on/off and division annotations')
-    # n0,b0,p0=plt.hist(md,bins='auto', alpha=0.75, edgecolor='black', color='b', label='Divisions (n='+f'{len(md)+len(bd)})')
-    # # n1,b1,p1=plt.hist(bd,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
-    # plt.legend()
-    # plt.xlim(0,30)
-    # plt.vlines(np.mean(md), ymin=0, ymax=max(n0),colors='k', linestyle='dashed')
-    # # plt.vlines(np.mean(bd), ymin=0, ymax=max(n0),colors='orange', linestyle='dashed')
 
-    # plt.figure()
-    # plt.xlabel('Time (min)')
-    # plt.title('Relative difference between myo1 on and bud emergence annotations})')
-    # n2,b2,p2=plt.hist(np.concatenate([ms,bs]),bins='auto', alpha=0.75, edgecolor='black', color='b', label='Bud Emergence (n='+f'{len(ms)+len(bs)})')
-    # # n2,b2,p2=plt.hist(ms,bins='auto', alpha=0.75, edgecolor='black', color='b', label='moms')
-    # # n3,b3,p3=plt.hist(bs,bins='auto', alpha=0.75, edgecolor='black', color='orange', label='buds')
-    # plt.legend()
-    # plt.xlim(0,45)
-    # plt.vlines(np.mean(np.concatenate([ms,bs])), ymin=0, ymax=max(n2),colors='k', linestyle='dashed')
-    # # plt.vlines(np.mean(bs), ymin=0, ymax=max(n2),colors='orange', linestyle='dashed')
+# %% plot initial bud size distribution
+def plot_buddist(cdf: pd.DataFrame):
+    """
+    Args: Processed Cell ACDC dataframe
+    Outputs: Numpy array of bud sizes at first detection
+    """
+    buds=cdf.loc[cdf.cc_group=='gbud']
+    # buds=cdf.loc[cdf.relationship=='bud']
+    bud_dist=[]
+    for bud_id in np.unique(buds['Cell_ID'].values):
+        bud_dist.append(buds.loc[buds.Cell_ID==bud_id, "cell_area_pxl"].values[0])
+    fig,axes=plt.subplots(nrows=1,ncols=1)
+    axes.hist(bud_dist, bins='auto', edgecolor='black', label='Buds')
+    axes.set_title('Initial Bud Size Distribution')
+    axes.set_xlabel('Cell Area (px^2)')
+    fig.tight_layout()
+    return bud_dist
+
+# gg,ss=cc_sort(cdfpath)
+# cdf=pd.concat([gg,ss])
+# bd=plot_buddist(cdf)
+# %% Run and Plot pairwise org parametric curves
+# vo_m, vo_b = fullccbin(odf, 'vo', binwidth=0.05)
+# ld_m, ld_b = fullccbin(odf, 'ld', binwidth=0.05)
+# gl_m, gl_b = fullccbin(odf, 'gl', binwidth=0.05)
+# fig,axes=plt.subplots(figsize=(6,6),nrows=3,ncols=1)
+# im00=axes[0].scatter(vo_m[:,1], ld_m[:,1], c=vo_m[:,0], edgecolor='k', cmap='Reds', label='mothers')
+# im01=axes[0].scatter(vo_b[:,1], ld_b[:,1], c=vo_b[:,0], marker='s', edgecolor='k', cmap='Reds', label='buds')
+# axes[0].set_xlabel('Vacuole Volume (vox)')
+# axes[0].set_ylabel('LD Volume (vox)')
+# axes[0].legend(loc='upper left')
+# fig.colorbar(im00, ax=axes[0], label='Normalized CC Position \n Div to Div')
+# im10=axes[1].scatter(vo_m[:,1], gl_m[:,1], c=vo_m[:,0], edgecolor='k', cmap='Reds', label='mothers')
+# im11=axes[1].scatter(vo_b[:,1], gl_b[:,1], c=vo_b[:,0], marker='s', edgecolor='k', cmap='Reds', label='buds')
+# axes[1].set_xlabel('Vacuole Volume (vox)')
+# axes[1].set_ylabel('Golgi Volume (vox)')
+# axes[1].legend(loc='upper left')
+# fig.colorbar(im10, ax=axes[1], label='Normalized CC Position \n Div to Div')
+# im20=axes[2].scatter(gl_m[:,1], ld_m[:,1], c=vo_m[:,0], edgecolor='k', cmap='Reds', label='mothers')
+# im21=axes[2].scatter(gl_b[:,1], ld_b[:,1], c=vo_b[:,0], marker='s', edgecolor='k', cmap='Reds', label='buds')
+# axes[2].set_xlabel('Golgi Volume (vox)')
+# axes[2].set_ylabel('LD Volume (vox)')
+# axes[2].legend(loc='upper left')
+# fig.colorbar(im20, ax=axes[2], label='Normalized CC Position \n Div to Div')
+# fig.tight_layout()
+
+# %% Organelle regression    
+import itertools
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import PolynomialFeatures
+
+def regr_pipeline(dataset: pd.DataFrame, deg: int, indep_vars: list):
+    """
+    Args: Dataframe including input and target data, other keyword args.
+    Outputs: Arrays of R^2 score distribution mean & std for given regressors and outcomes.
+    """
+    scores=[]
+    for n in range(1000):
+        train, test = train_test_split(dataset,test_size=0.3)
+        X_train,X_test = train[indep_vars], test[indep_vars]
+        Y_train,Y_test = group_odf.loc[group_odf.index[train.index], outcomes[0]], group_odf.loc[group_odf.index[test.index], outcomes[0]]
+
+        # regr = LinearRegression().fit(X_train, Y_train)
+        polynomial_features = PolynomialFeatures(degree=deg, include_bias=False)
+        linear_regression = LinearRegression()
+        pipeline = Pipeline(
+            [("polynomial_features", polynomial_features),
+                ("linear_regression", linear_regression)])
+        regr=pipeline.fit(X_train, Y_train)
+
+        score=regr.score(X_test,Y_test)
+        scores.append(score)
+    output.append([np.mean(scores), np.std(scores)])
+    return output
+        # print(f"Independent Vars: {indep_vars}")
+        # print(f"Score: {score}")
+        # print('Coefficients: \n', regr.coef_)
+        # print('Intercept: \n', regr.intercept_)
+        # print('Coefficients: \n', regr.coef_)
+
+###Need to add paramter output, especially for those with multiple regressor inputs.
+#  Also org-org predictions. Also figure out whether the Pipeline with polynomial is doing what I would like it to be doing.
+outcomes = ['frac_time']
+# outcomes = ['real_time']
+regressors = ['vo_vol', 'ld_vol', 'gl_vol']
+
+def linregr(indiv_regressors: list, outcomes: list, deg: int=1, plot_graph=True):
+    """
+    Args: Lists of regressors and target outcomes, degree of polynomial features
+    Outputs: Arrays of regression score stats after n runs and a graph.
+    """
+    combos = []
+    for i in range(1, len(indiv_regressors)+1):
+        els = [list(x) for x in itertools.combinations(indiv_regressors, i)]
+        combos.extend(els)
+
+    groups=['mother', 'bud']
+    for group in groups: 
+        output=[]
+        group_odf=odf.loc[odf.relationship==group]
+        group_odf.reset_index(drop=True, inplace=True)
+        
+        # ind=0
+        for indep_vars in combos:
+            dataset=group_odf[indep_vars]
+            # output = regr_pipeline(dataset, deg, indep_vars)
+            scores=[]
+            for n in range(100):
+                train, test = train_test_split(dataset,test_size=0.3)
+                X_train,X_test = train[indep_vars], test[indep_vars]
+                Y_train,Y_test = group_odf.loc[group_odf.index[train.index], outcomes[0]], group_odf.loc[group_odf.index[test.index], outcomes[0]]
+
+                # regr = LinearRegression().fit(X_train, Y_train)
+                polynomial_features = PolynomialFeatures(degree=deg, include_bias=False)
+                linear_regression = LinearRegression()
+                pipeline = Pipeline(
+                    [("polynomial_features", polynomial_features),
+                        ("linear_regression", linear_regression)])
+                regr=pipeline.fit(X_train, Y_train)
+
+                score=regr.score(X_test,Y_test)
+                scores.append(score)
+            output.append([np.mean(scores), np.std(scores)])
+
+        if group=='mother':
+            m_outarr=np.array(output)
+        else:
+            b_outarr=np.array(output)
+
+    if plot_graph==True:
+        fig, axes = plt.subplots(1, 1)
+        xticks = np.linspace(0, len(m_outarr), len(m_outarr))
+        axes.errorbar(xticks, m_outarr[:,0], m_outarr[:,1], fmt="o", label='mothers')
+        axes.errorbar(xticks, b_outarr[:,0], b_outarr[:,1], fmt="o", c='r', label='buds')
+        axes.set_title(f"Organelle Volumes as Regressors \n for Normalized CC Position deg={deg}")
+        axes.set_ylabel('Average R^2 Value')
+        axes.legend()
+        # axes.set_ylim([0,1])
+        xlabels = [" ".join(label) for label in combos]
+        axes.set_xticks(xticks, labels=xlabels)
+        axes.tick_params("x", rotation=-45)
     
-# %% graveyard
-# old full cc org analysis
-############################################################################# old copy below
-    # g1_dfs=[]
-    # s_dfs=[]
-    # for cell_path in cell_dfpaths:
-    #     # celldf=pd.read_csv(cell_path)
-    #     g1df_sort, sdf_sort = cc_sort(cell_path)
-    #     g1_df, s_df = find_full_transitions(g1df_sort, sdf_sort)
-    #     path_parts=cell_path.stem.split("_")
-    #     date=path_parts[1]
-    #     fov=path_parts[4]
+    return m_outarr, b_outarr, combos
 
-    #     for cell_id in np.unique(g1_df['Cell_ID'].values):
-    #         cell_rows=g1_df.loc[g1_df.Cell_ID==cell_id]
-    #         start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
-    #         div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
-    #         start_2=cell_rows.loc[cell_rows.Start_Index_2==0, 'frame_i'].values[0]
-    #         cc_length = (start_2 - start_1) * cam_samprate
-            
-    #         cell_metrics={
-    #             "Cell_ID"           : [cell_id],
-    #             "date"              : [date], 
-    #             "fov"               : [fov],
-    #             "relationship"      : [cell_rows['relationship'].values[0]],
-    #             # "transitions"       : [cell_rows['transitions'].values[0]],
-    #             "cc_length"         : [cc_length]
-    #         }
-    #         result=cell_metrics
+def plot_regrcomp(indiv_regressors: list, outcomes: list, deg: int=1):
+    """
+    Args:  Lists of regressors and target outcomes, degree of polynomial features
+    Outputs: Plot overlaying the R^2 scores of the regressor combos on each of the target outcomes. 
+    """
+    fig, axes = plt.subplots(1, 1)
+    markers=['o', 's', 'v', '<']
+    colors=['m', 'k', 'r', 'y']
+    for i in range(len(outcomes)):
+        m_outarr, b_outarr, combos = linregr(indiv_regressors, [outcomes[i]], deg, plot_graph=False)
+        xticks = np.linspace(0, len(m_outarr), len(m_outarr))
+        axes.errorbar(xticks, m_outarr[:,0], m_outarr[:,1], fmt=markers[i], c=colors[i], label=f"{outcomes[i]} mothers")
+        axes.errorbar(xticks, b_outarr[:,0], b_outarr[:,1], fmt=markers[i], c=colors[i], label=f"{outcomes[i]} buds")
+    axes.set_title(f"Organelle Volumes as Regressors \n for Normalized CC Position deg={deg}")
+    axes.set_ylabel('Average R^2 Value')
+    axes.legend(fontsize='x-small')
+    xlabels = [" ".join(label) for label in combos]
+    axes.set_xticks(xticks, labels=xlabels)
+    axes.tick_params("x", rotation=-45)
+    return
+# %% #including cross validation or some bs idk
+# ## https://scikit-learn.org/stable/modules/cross_validation.html
+# from sklearn.linear_model import LinearRegression
+# from sklearn.model_selection import cross_val_score
+# from sklearn.pipeline import Pipeline
+# from sklearn.preprocessing import PolynomialFeatures
 
-    #         for org_path in org_dfpaths: 
-    #             meta=parse_meta_orgmeasure(org_path.stem)
-    #             org_label=meta['organelle']
-    #             orgdf=pd.read_csv(org_path)
-    #             org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
+# polynomial_features = PolynomialFeatures(degree=2, include_bias=False)
+# linear_regression = LinearRegression()
+# pipeline = Pipeline(
+#     [("polynomial_features", polynomial_features),
+#         ("linear_regression", linear_regression)])
+# pipeline.fit(X_train, Y_train)
 
-    #             for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
-    #                 org_frame=org_rows.loc[org_rows.time==frame]
-    #                 abs_time=org_frame['abs_time'].values[0]
-    #                 frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
-    #                 approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
-    #                 org_count=len(org_frame['idx-orga'].values)
-    #                 org_vox=org_rows['volume-pixel'].values
-    #                 if len(org_vox)>0:
-    #                     org_vox_tot=np.sum(org_vox)
-    #                 else:
-    #                     org_vox_tot=org_vox[0]
-    #                 org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
+# # Evaluate the models using crossvalidation
+# scores = cross_val_score(
+#     pipeline, X_test, Y_test, scoring="neg_mean_squared_error", cv=10
+# )
 
-    #                 org_metrics={
-    #                     "abs_time"         : [abs_time],
-    #                     "frac_time"        : [frac_time],
-    #                     "approx_vol"       : [approx_vol],
-    #                     "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
-    #                     "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
-    #                     org_label+"_vox"   : [org_vox_tot],
-    #                     org_label+"_frac"  : [org_vol_frac],
-    #                     org_label+"_count" : [org_count]
-    #                         }
-            
-    #                 results = result | org_metrics
-    #                 g1_dfs.append(pd.DataFrame(results))
-
-    #     for cell_id in np.unique(s_df['Cell_ID'].values):
-    #         cell_rows=s_df.loc[s_df.Cell_ID==cell_id]
-    #         div_1=cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0]
-    #         start_1=cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]
-    #         div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0]
-    #         cc_length = (div_2 - div_1) * cam_samprate
-            
-    #         cell_metrics={
-    #             "Cell_ID"           : [cell_id],
-    #             "date"              : [date], 
-    #             "fov"               : [fov],
-    #             "relationship"      : [cell_rows['relationship'].values[0]],
-    #             # "transitions"       : [cell_rows['transitions'].values[0]],
-    #             "cc_length"         : [cc_length]
-    #         }
-    #         result=cell_metrics
-
-    #         for org_path in org_dfpaths: 
-    #             meta=parse_meta_orgmeasure(org_path.stem)
-    #             org_label=meta['organelle']
-    #             orgdf=pd.read_csv(org_path)
-    #             org_rows=orgdf.loc[orgdf.idx_cell==cell_id]
-
-    #             for frame in np.unique(org_rows['time'].values): #only do frames that have an org measurement
-    #                 org_frame=org_rows.loc[org_rows.time==frame]
-    #                 abs_time=org_frame['abs_time'].values[0]
-    #                 frac_time = (abs_time - (start_1 * cam_samprate)) / (cc_length)
-    #                 approx_vol=cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'approx_vol'].values[0]
-    #                 org_count=len(org_frame['idx-orga'].values)
-    #                 org_vox=org_rows['volume-pixel'].values
-    #                 if len(org_vox)>0:
-    #                     org_vox_tot=np.sum(org_vox)
-    #                 else:
-    #                     org_vox_tot=org_vox[0]
-    #                 org_vol_frac=(org_vox_tot*(cam_pxl_size**3)) / approx_vol
-
-    #                 org_metrics={
-    #                     "abs_time"         : [abs_time],
-    #                     "frac_time"        : [frac_time],
-    #                     "approx_vol"       : [approx_vol],
-    #                     "cell_area_norm"   : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'cell_area_norm'].values[0]],
-    #                     "Relative_ID"      : [cell_rows.loc[cell_rows.time_minutes==int(abs_time), 'relative_ID'].values[0]],
-    #                     org_label+"_vox"   : [org_vox_tot],
-    #                     org_label+"_frac"  : [org_vol_frac],
-    #                     org_label+"_count" : [org_count]
-    #                         }
-            
-    #                 results = result | org_metrics
-    #                 s_dfs.append(pd.DataFrame(results))
-
-    #     g1_org_df=pd.concat(g1_dfs, ignore_index=True)
-    #     s_org_df=pd.concat(s_dfs, ignore_index=True)
-
-    # g1_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
-    # s_org_df.sort_values(by=['frac_time', 'Cell_ID'], inplace=True, ignore_index=True)
-
-    # if save_csv==True:
-    #     g1_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
-    #     s_org_df.to_csv(Path(expmt_path+'\cc_measure')/f"{meta['date']}.csv",index=False)
-
-
-    # return g1_org_df, s_org_df
+# plt.figure(figsize=(14, 5))
+# for i in range(len(degrees)):
+# ax = plt.subplot(1, len(degrees), i + 1)
+# plt.setp(ax, xticks=(), yticks=())
+# X_test = np.linspace(0, 1, 100)
+# plt.plot(X_test, pipeline.predict(X_test), label="Model")
+# plt.scatter(X_test, Y_test, edgecolor="b", s=20, label="Samples")
+# plt.xlabel("x")
+# plt.ylabel("y")
+# plt.xlim((0, 1))
+# plt.ylim((-2, 2))
+# plt.legend(loc="best")
+# plt.title(
+#     "Degree {}\nMSE = {:.2e}(+/- {:.2e})".format(
+#         degrees[i], -scores.mean(), scores.std()
+#     )
+# )
+# plt.show()
+# %%

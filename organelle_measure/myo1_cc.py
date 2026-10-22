@@ -7,18 +7,20 @@ import os
 import sys
 sys.path.append(r'C:\Users\jglic\Documents\School\WashU\Mukherji Lab\organelle-measure\organelle_measure')
 from pathing_variables import expmt_path
-from org_cc import cc_sort, find_all_transitions
+from org_cc import cc_sort, find_all_transitions, find_full_transitions, calc_ccmetrics, ceildiv
 # from tools import batch_apply
 # %%
-julcpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\cell_measure\BF-timelapse_acdc_output_07172026_cpsam-d25-ms20.csv'
+julcpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\cell_measure\BF-timelapse_07172026_myo1-mlemon_glucose-2.0_fov1.csv'
 julmaskpath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\BF-timelapse_07172026_myo1-mlemon_glucose-2.0_fov1_segm-afftransf-expand.tif'
 julmyo1path=r'C:\Users\jglic\Downloads\07172026 myo1 high res\confyellow-jg_07172026_myo1-mlemon_glucose-2.0_fov1_despeckle_r=4.csv'
 julaapath=r'C:\Users\jglic\Downloads\07172026 myo1 high res\autoassigntable_r=4_norm.csv'
+mdfjul=pd.read_csv(julmyo1path)
 
-juncpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_acdc_output_cpsam-d25.csv'
-junmaskpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_cpsam-d25_afftransf-TEST2.tif'
-junmyo1path=r'C:\Users\jglic\Downloads\06102026 myo1 high res\SUM-confyellow-jg_06102026_ey2795-myo1_glucose-2.0_fov1_despeckle_r=4.csv'
-junaapath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\autoassigntable_r=4_norm.csv'
+# juncpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_06102026_myo1-mlemon_glucose-2.0_fov1.csv'
+# junmaskpath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\BF-timelapse_cpsam-d25_afftransf-TEST2.tif'
+# junmyo1path=r'C:\Users\jglic\Downloads\06102026 myo1 high res\SUM-confyellow-jg_06102026_ey2795-myo1_glucose-2.0_fov1_despeckle_r=4.csv'
+# junaapath=r'C:\Users\jglic\Downloads\06102026 myo1 high res\autoassigntable_r=4_norm.csv'
+# mdfjun=pd.read_csv(junmyo1path)
 
 # cpath=r'C:\Users\jglic\Downloads\11052025 myo1\BF-timelapse_acdc_output_cpsam-d10-ms8.csv'
 # maskpath=r'C:\Users\jglic\Downloads\11052025 myo1\BF-timelapse_cpsam-d10-ms8_afftransf_no-border.tif'
@@ -32,21 +34,19 @@ def ticks(myo1_df: pd.DataFrame, thresh: float=0.4):
     """
     dfs=[]
     for roi_id in np.unique(myo1_df['ROI_ID'].values):
-        vals=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'sum'].values
-        vals=vals/np.max(vals)
+        raw_vals=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'sum'].values
+        vals=raw_vals/np.max(raw_vals)
         yi=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'y'].values[0]
         xi=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'x'].values[0]
         frames=myo1_df.loc[myo1_df.ROI_ID==roi_id, 'frame'].values
-
-        # on_thresh=min([50, 0.5*np.max(vals)])
         on_thresh=thresh
         on_indices=np.where(vals>on_thresh)[0]
-        # off_thresh=max([50, 0.4*np.max(vals)])
         off_thresh=thresh
         off_indices=np.where(vals<off_thresh)[0]
         start_frame=None
         div_frame=None
 
+        #indices for cc analysis
         pre_on=[x for x in off_indices if x<on_indices[0]]
         if len(pre_on)>0:
             start_frame=frames[pre_on[-1]]+1  
@@ -54,13 +54,20 @@ def ticks(myo1_df: pd.DataFrame, thresh: float=0.4):
         if len(post_on)>0:
             div_frame=frames[post_on[0]]
 
+        #Raw sum intensity analysis
+        raw_on=[raw_vals[ind] for ind in on_indices]
+        on_avg=np.mean(raw_on)
+        on_std=np.std(raw_on)
+
         if len(pre_on)>0 or len(post_on)>0: #if there is an up/downtick, save info
             metrics={
                 "ROI_ID"      : [roi_id],
                 "y"           : [yi],
                 "x"           : [xi],
                 "Start_Frame" : [start_frame],
-                "Div_Frame"   : [div_frame]
+                "Div_Frame"   : [div_frame],
+                "on_avg"      : [on_avg],
+                "on_std"      : [on_std]
             }
 
             roi_df=pd.DataFrame(metrics)
@@ -147,7 +154,7 @@ def autoassign(myo1df_path: str, cellmask_path: str, cellacdc_path: str, camsamp
     return aadf
 
 
-# %% cc size and myo1 overlay
+# %% Analyze cc size and myo1 overlay
 def analyze_myo1size(cell_path: str, aa_path: str, thresh: float=0.45, cell_metric: str='cell_area_norm', myo1_metric: str='norm_int'):
     """
     Args: Paths to dataframes containing cell segm & annot outputs and myo1 intensity df with auto-matched cell ids.
@@ -155,12 +162,12 @@ def analyze_myo1size(cell_path: str, aa_path: str, thresh: float=0.45, cell_metr
     """
     celldf=pd.read_csv(cell_path)
     g1_df,s_df=cc_sort(cell_path)
-    g1df,sdf=find_all_transitions(g1_df,s_df)
+    cdf=find_all_transitions(g1_df,s_df)
     # g1df,sdf=find_full_transitions(g1_df,s_df)
-    g1_moms=g1df.loc[g1df.cc_group=='gmom'].copy()
-    s_moms=sdf.loc[sdf.cc_group=='smom'].copy()
-    g1_buds=g1df.loc[g1df.cc_group=='gbud'].copy()
-    s_buds=sdf.loc[sdf.cc_group=='sbud'].copy()
+    g1_moms=cdf.loc[cdf.cc_group=='gmom'].copy()
+    s_moms=cdf.loc[cdf.cc_group=='smom'].copy()
+    g1_buds=cdf.loc[cdf.cc_group=='gbud'].copy()
+    s_buds=cdf.loc[cdf.cc_group=='sbud'].copy()
 
     myo1df=pd.read_csv(aa_path)
     ticksdf=ticks(myo1df, thresh=thresh)
@@ -333,14 +340,14 @@ def plot_myo1(mdf: pd.DataFrame, consamprate: int=3, ms: int=5):
     Outputs: Plot displaying myo1 intensity as fnc of time.
     """
     fig,axes=plt.subplots(nrows=1,ncols=2,sharex=True)
-    hline=0.45
+    hline=0.4
 
     myo1sta=mdf.loc[mdf.cat=='myo1-sta']
     for time in myo1sta['rel_frame'].values: 
         y=myo1sta.loc[myo1sta.rel_frame==time, 'vals'].values[0]
         x=np.array([int(time)*consamprate for i in range(len(y))])
         axes[0].scatter(x, y,s=5,c='k',marker='o')
-        axes[0].axhline(y=hline,xmin=0,xmax=1,ls='--', label='y= '+str(hline))
+        # axes[0].axhline(y=hline,xmin=0,xmax=1,ls='--', label='y= '+str(hline))
         # axes[0].set_ylim(-5,5)
     
     myo1div=mdf.loc[mdf.cat=='myo1-div']
@@ -348,7 +355,7 @@ def plot_myo1(mdf: pd.DataFrame, consamprate: int=3, ms: int=5):
         y=myo1div.loc[myo1div.rel_frame==time, 'vals'].values[0]
         x=np.array([int(time)*consamprate for i in range(len(y))])
         axes[1].scatter(x, y,s=5,c='k',marker='o')
-        axes[1].axhline(y=hline,xmin=0,xmax=1,ls='--', label='y= '+str(hline))
+        # axes[1].axhline(y=hline,xmin=0,xmax=1,ls='--', label='y= '+str(hline))
 
     # axes[0].legend()
     # axes[1].legend()
@@ -527,8 +534,7 @@ def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.4, camsamprat
     myo1df=pd.read_csv(aamyo1_path)
     ticksdf=ticks(myo1df,thresh=thresh)
     g1_df,s_df=cc_sort(cell_path)
-    g1df, sdf = find_all_transitions(g1_df, s_df) 
-    all_cells=pd.concat([g1df, sdf], ignore_index=True)
+    all_cells=find_all_transitions(g1_df, s_df) 
     myo1start, myo1div =[],[]
     dfs=[]
 
@@ -537,7 +543,6 @@ def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.4, camsamprat
             roi_rows=myo1df.loc[myo1df.ROI_ID==roi_id]
             cell_id, count = stats.mode(roi_rows['Cell_ID'].values, nan_policy='omit')
             if cell_id in all_cells['Cell_ID'].values:
-                # if cell_id not in ignore_list:
                 cell_rows=all_cells.loc[all_cells.Cell_ID==cell_id].copy()
                 cc_group=cell_rows['cc_group'].values[0]
 
@@ -551,11 +556,16 @@ def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.4, camsamprat
                         xi=roi_rows.loc[roi_rows.frame==myo1_start[0],'x'].values[0]
                         if (start_diff_1:=(camsamprate*annot_start_1.values[0]-consamprate*myo1_start[0]))>0:
                             myo1start.append(start_diff_1)
+
+                            bud_rows=all_cells.loc[(all_cells.relative_ID==cell_id) & (all_cells.relationship=='bud')]
+                            initial_bud_size=bud_rows['cell_area_pxl'].values[0]
+
                             metrics={
                                         "Cell_ID"      : [cell_id], 
                                         "ROI_ID"       : [roi_id],
                                         "cc_group"     : [cc_group[1:]],
                                         "start_diff"   : [start_diff_1],
+                                        "bud_size"     : [initial_bud_size]
                                     }
                             metric_df=pd.DataFrame(metrics)
                             dfs.append(metric_df)
@@ -565,11 +575,16 @@ def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.4, camsamprat
                         elif annot_start_2.empty==False:
                             if (start_diff_2:=(camsamprate*annot_start_2.values[0]-consamprate*myo1_start[0]))>0:
                                 myo1start.append(start_diff_2)
+
+                                bud_rows=all_cells.loc[(all_cells.relative_ID==cell_id) & (all_cells.relationship=='bud')]
+                                initial_bud_size=bud_rows['cell_area_pxl'].values[0]
+
                                 metrics={
                                         "Cell_ID"      : [cell_id], 
                                         "ROI_ID"       : [roi_id],
                                         "cc_group"     : [cc_group[1:]],
                                         "start_diff"   : [start_diff_2],
+                                        "bud_size"     : [initial_bud_size]
                                         }
                                 metric_df=pd.DataFrame(metrics)
                                 dfs.append(metric_df)
@@ -605,8 +620,8 @@ def find_ccdiffs(cell_path: str, aamyo1_path: str, thresh: float=0.4, camsamprat
 
     print(len(myo1start), len(myo1div))
     diff_df=pd.concat(dfs, ignore_index=True)
-    return myo1start, myo1div
-    # return diff_df
+    # return myo1start, myo1div
+    return diff_df
 
 # %% Gaussian for curve fitting of waiting time distributions
 def gaussian(x, u, amp, std):
@@ -627,7 +642,7 @@ def poisson(x, lam):
     
 # %% Plot cc uncertainty histograms
 from scipy import stats
-def plot_distr(ms: np.ndarray, md: np.ndarray):
+def plot_distr(ms: np.ndarray, md: np.ndarray, **kwargs):
     """
     Args: Dataframe containing difference measurements between annotations and myo1 dynamics.
     Outputs: Two plots illustrating the distribution of said measurements.
@@ -655,11 +670,11 @@ def plot_distr(ms: np.ndarray, md: np.ndarray):
     div_mean=div_dist.mean(*div_res.params)
     div_std=div_dist.std(*div_res.params)
 
-    # custom_diffs=[val for val in diffdf['start_diff'].values if -20<val<30]
-    # cus_dist=stats.skewnorm
-    # cus_res = stats.fit(cus_dist, custom_diffs, bounds=[(0,5), (0,40), (1,10)])
-    # cus_mean=cus_dist.mean(*cus_res.params)
-    # cus_std=cus_dist.std(*cus_res.params)
+    custom_diffs=[val for val in diffdf['start_diff'].values if val]
+    cus_dist=stats.skewnorm
+    cus_res = stats.fit(cus_dist, custom_diffs, bounds=[(0,5), (0,40), (1,10)])
+    cus_mean=cus_dist.mean(*cus_res.params)
+    cus_std=cus_dist.std(*cus_res.params)
 
     # Now want to overlay fit curves with raw disributions.
     plt.figure()
@@ -674,10 +689,10 @@ def plot_distr(ms: np.ndarray, md: np.ndarray):
     divx=np.linspace(min(md), max(md), 100)
     plt.plot(divx, div_dist.pdf(divx,*div_res.params), 'k--', label='PDF fit')
 
-    # n2, b2, _ = plt.hist(custom_diffs, bins='doane', alpha=0.75, edgecolor='black', density=True, color='r', 
-    # label='Custom Starts (n='+f'{len(custom_diffs)}) $\mu$='+str(np.round(np.mean(custom_diffs),2)))
-    # cusx=np.linspace(min(custom_diffs), max(custom_diffs), 100)
-    # plt.plot(cusx, cus_dist.pdf(cusx,*cus_res.params), 'k--', label='PDF fit')
+    n2, b2, _ = plt.hist(custom_diffs, bins='doane', alpha=0.75, edgecolor='black', density=True, color='r', 
+    label='Custom Starts (n='+f'{len(custom_diffs)}) $\mu$='+str(np.round(np.mean(cus_mean),2))+',$\sigma$='+str(np.round(cus_std,2)))
+    cusx=np.linspace(min(custom_diffs), max(custom_diffs), 100)
+    plt.plot(cusx, cus_dist.pdf(cusx,*cus_res.params), 'k--', label='PDF fit')
     
     plt.title('PDFs and Fits of Waiting Time Distributions')
     plt.xlabel('Time (min)')
@@ -689,14 +704,69 @@ def plot_distr(ms: np.ndarray, md: np.ndarray):
     print('Budding std = '+str(bud_dist.std(*bud_res.params)))
     print('Division mean = '+str(div_dist.mean(*div_res.params)))
     print('Division std = '+str(div_dist.std(*div_res.params)))
-    # print('Custom mean = '+str(cus_dist.mean(*cus_res.params)))
-    # print('Custom std = '+str(cus_dist.std(*cus_res.params)))
+    print('Custom mean = '+str(cus_dist.mean(*cus_res.params)))
+    print('Custom std = '+str(cus_dist.std(*cus_res.params)))
 
     return bud_res.params, div_res.params
-
-
+# %% Plot myo1 int vs cc length
+tdfjul=ticks(mdfjul)
+tdfjun=ticks(mdfjun)
+# cdfjul=pd.read_csv(julcpath)
+# cdfjun=pd.read_csv(juncpath)
+# %%
+gg,ss=cc_sort(julcpath)
+cdfjul=find_all_transitions(gg,ss)
+gg,ss=cc_sort(juncpath)
+cdfjun=find_all_transitions(gg,ss)
+# cdfjul=calc_ccmetrics(julcpath, cam_samprate=1, con_samprate=3)
+# cdfjun=calc_ccmetrics(juncpath, cam_samprate=2, con_samprate=5)
 # %%
 # junms, junmd = find_ccdiffs(juncpath, junaapath, camsamprate=2, consamprate=5)
 # julms, julmd = find_ccdiffs(julcpath, julaapath, camsamprate=1, consamprate=3)
 # ms, md = np.concatenate([junms, julms]), np.concatenate([julms, julmd])
 # plot_distr(ms, md)
+# %% Calc myo1 intensity avg vs cc length
+def myo1int_cc(cdfpath: str, aadfpath: str, tdf: pd.DataFrame, cam_samprate: int):
+    """
+    Args:
+    Outputs:
+    """
+    slen=[]
+    mint=[]
+    mstd=[]
+    gg,ss=cc_sort(cdfpath)
+    cdf=find_all_transitions(gg,ss)
+    aadf=pd.read_csv(aadfpath)
+    cdf=cdf.dropna(subset=['Start_Index_1'])
+    cdf=cdf.dropna(subset=['Div_Index_1'])
+    for roi_id in np.unique(aadf['ROI_ID'].values):
+        if roi_id in np.unique(tdf['ROI_ID'].values):
+            roi_rows=aadf.loc[aadf.ROI_ID==roi_id]
+            cell_id, count = stats.mode(roi_rows['Cell_ID'].values, nan_policy='omit')
+
+            cell_rows=cdf.loc[cdf.Cell_ID==cell_id]
+            if cell_rows.empty==False:
+                if cell_rows['cc_group'].values[0]=='gmom':
+                    slen.append(cam_samprate*(cell_rows.loc[cell_rows.Div_Index_1==0, 'frame_i'].values[0] - cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]))
+                    mint.append(tdf.loc[tdf.ROI_ID==roi_id, 'on_avg'].values[0])
+                    mstd.append(tdf.loc[tdf.ROI_ID==roi_id, 'on_std'].values[0])
+
+                else:
+                    div_2=cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i']
+                    if div_2.empty==False:
+                        slen.append(cam_samprate*(cell_rows.loc[cell_rows.Div_Index_2==0, 'frame_i'].values[0] - cell_rows.loc[cell_rows.Start_Index_1==0, 'frame_i'].values[0]))
+                        mint.append(tdf.loc[tdf.ROI_ID==roi_id, 'on_avg'].values[0])
+                        mstd.append(tdf.loc[tdf.ROI_ID==roi_id, 'on_std'].values[0])
+    return slen, mint, mstd
+# %% Plot myo1 intensity avg vs cc length
+s1,m1,d1=myo1int_cc(julcpath, julaapath, tdfjul, cam_samprate=1)
+s2,m2,d2=myo1int_cc(juncpath, junaapath, tdfjun, cam_samprate=2)
+s,m,d=np.concatenate([s1,s2]), np.concatenate([m1,m2]), np.concatenate([d1,d2])
+plt.figure()
+plt.errorbar(s1,m1,d1, label='07172026', fmt='o')
+plt.errorbar(s2,m2,d2, label='06102026', fmt='o')
+plt.xlabel('Time (min)')
+plt.ylabel('Mean Myo1 ROI SUM Intensity When "On"')
+plt.title('Myo1 Intensity vs Annotated S-Phase Length')
+plt.legend(loc='upper left')
+# %% 
